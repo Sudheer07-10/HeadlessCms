@@ -86,8 +86,11 @@ const getCookieOptions = (c: any, maxAge: number) => {
   let domain: string | undefined = undefined
 
   const baseAppDomain = process.env.APP_DOMAIN || 'my-cms.com'
+  const isSelfHosted = process.env.IS_SELF_HOSTED === 'true'
 
-  if (cleanHost.endsWith(`.${baseAppDomain}`) || cleanHost === baseAppDomain) {
+  // If self-hosted, DO NOT set the domain attribute so the browser 
+  // safely defaults to the exact host, avoiding Vercel PSL cookie blocking!
+  if (!isSelfHosted && (cleanHost.endsWith(`.${baseAppDomain}`) || cleanHost === baseAppDomain)) {
     domain = `.${baseAppDomain}`
   }
 
