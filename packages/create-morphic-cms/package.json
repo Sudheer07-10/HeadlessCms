@@ -1,0 +1,27 @@
+{
+  "name": "create-my-cms",
+  "version": "0.1.0",
+  "description": "Create a self-hosted My CMS project.",
+  "type": "module",
+  "bin": {
+    "create-my-cms": "./bin/create-my-cms.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bayukurniawan30/my-cms.git",
+    "directory": "packages/create-my-cms"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "node ./bin/create-my-cms.js",
+    "test": "node --test ./test/*.test.mjs"
+  }
+}

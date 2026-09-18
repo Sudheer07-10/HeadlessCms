@@ -1,0 +1,446 @@
+import Layout from '@/components/Layout'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Link, router, usePage } from '@inertiajs/react'
+import {
+  ArrowDown,
+  ArrowUp,
+  CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+  LayersIcon,
+  LayoutGridIcon,
+  PlusIcon,
+  SearchIcon,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { useEffect, useState } from 'react'
+
+interface Collection {
+  id: number
+  name: string
+  slug: string
+  fields: any[]
+  type: 'collection' | 'global'
+  createdBy?: { id: number; name: string }
+  createdById?: number
+  tenant?: { id: number; name: string }
+  createdAt: string
+  updatedAt: string
+}
+
+interface ListProps {
+  collections: Collection[]
+  user?: any
+  filters?: {
+    sort: string
+    dir: string
+    type?: 'all' | 'collection' | 'global'
+    page?: number
+    limit?: number
+    q?: string
+  }
+  pagination?: {
+    currentPage: number
+    totalPages: number
+    totalCount: number
+    limit: number
+  }
+  totalWorkspaceCollections?: number
+  flash?: {
+    success?: string
+    error?: string
+  }
+}
+
+export default function CollectionsList({
+  collections,
+  user,
+  filters,
+  pagination,
+  totalWorkspaceCollections = 0,
+  flash,
+}: ListProps) {
+  const { props: pageProps } = usePage()
+  const activeTenant = (pageProps as any).activeTenant
+  const features = (pageProps as any).features
+  const isSystemGlobal = !activeTenant
+
+  const isLimitReached =
+    user?.role !== 'super_admin' &&
+    !!activeTenant &&
+    !!features &&
+    typeof features.maxCollections === 'number' &&
+    totalWorkspaceCollections >= features.maxCollections
+
+  const [searchQuery, setSearchQuery] = useState(filters?.q || '')
+
+  const handleDelete = async (id: number) => {
+    if (
+      !confirm(
+        'Are you sure you want to delete this collection? All schema definitions will be lost.'
+      )
+    )
+      return
+
+    try {
+      const res = await fetch(`/api/collections/${id}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        toast.success('Collection deleted successfully')
+        window.location.reload()
+      } else {
+        toast.error(data.error || 'Failed to delete collection')
+      }
+    } catch (e) {
+      toast.error('Network error')
+    }
+  }
+
+  const currentSort = filters?.sort || 'createdAt'
+  const currentDir = filters?.dir || 'desc'
+  const currentType = filters?.type || 'all'
+  const currentPage = pagination?.currentPage || 1
+
+  const updateFilters = (newFilters: any) => {
+    const finalFilters = {
+      sort: currentSort,
+      dir: currentDir,
+      type: currentType,
+      page: currentPage,
+      q: searchQuery,
+      ...newFilters,
+    }
+
+    router.get('/collections', finalFilters, {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+    })
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery !== (filters?.q || '')) {
+        updateFilters({ q: searchQuery, page: 1 })
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  const toggleSort = (field: string) => {
+    const newDir =
+      currentSort === field && currentDir === 'asc' ? 'desc' : 'asc'
+    updateFilters({ sort: field, dir: newDir, page: 1 })
+  }
+
+  const handleTypeChange = (type: string) => {
+    updateFilters({ type, page: 1 })
+  }
+
+  const handlePageChange = (page: number) => {
+    updateFilters({ page })
+  }
+
+  const renderSortIcon = (field: string) => {
+    if (currentSort !== field) return null
+    return currentDir === 'asc' ? (
+      <ArrowUp className='ml-1 h-4 w-4' />
+    ) : (
+      <ArrowDown className='ml-1 h-4 w-4' />
+    )
+  }
+
+  const renderFieldsTooltip = (fields: any[]) => {
+    if (!fields || fields.length === 0) return 'No fields defined'
+
+    const displayFields = fields.slice(0, 3).map((f) => f.label || f.name)
+    const remaining = fields.length - 3
+
+    let text = displayFields.join(', ')
+    if (remaining > 0) {
+      text += ` and ${remaining} more field${remaining > 1 ? 's' : ''}`
+    }
+
+    return text
+  }
+
+  return (
+    <Layout user={user} title='Collections'>
+      <div className='flex flex-col space-y-6'>
+        <div className='flex flex-col sm:flex-row justify-between space-y-4 sm:space-y-0'>
+          <div>
+            <div className='flex items-center space-x-2 mb-1'>
+              <LayoutGridIcon className='w-5 h-5 text-primary' />
+              <h1 className='text-3xl font-bold tracking-tight'>Collections</h1>
+            </div>
+            <p className='text-muted-foreground text-sm'>
+              Manage your content types and schemas (
+              {pagination?.totalCount || 0} total).
+            </p>
+          </div>
+          <div className='flex flex-wrap gap-3 items-center'>
+            <div className='w-48'>
+              <Select value={currentType} onValueChange={handleTypeChange}>
+                <SelectTrigger className='h-10 bg-card border-muted-foreground/20'>
+                  <SelectValue placeholder='All Types' />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='all'>All Types</SelectItem>
+                  <SelectItem value='collection'>
+                    Collection (Multiple Entries)
+                  </SelectItem>
+                  <SelectItem value='global'>Global (Singleton)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {isLimitReached && (
+              <p className='text-xs text-destructive bg-destructive/10 px-3 py-1.5 rounded-lg border border-destructive/20 font-medium'>
+                Collection limit reached ({totalWorkspaceCollections}/{features?.maxCollections}). Upgrade your plan to add more.
+              </p>
+            )}
+            {!isLimitReached && (
+              <Button asChild>
+                <Link href='/collections/add'>
+                  <PlusIcon className='w-4 h-4 mr-2' />
+                  Add Collection
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {flash?.error && (
+          <div className='p-4 bg-destructive/10 text-destructive rounded-md border border-destructive/20'>
+            {flash.error}
+          </div>
+        )}
+
+        {flash?.success && (
+          <div className='p-4 bg-green-500/10 text-green-600 rounded-md border border-green-500/20'>
+            {flash.success}
+          </div>
+        )}
+
+        <div className='bg-card rounded-xl shadow-sm border overflow-hidden'>
+          <div className='p-4 border-b bg-muted/20 flex flex-col md:flex-row gap-4 items-center justify-between'>
+            <div className='relative w-full md:w-72'>
+              <SearchIcon className='absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground' />
+              <Input
+                placeholder='Search collections...'
+                className='pl-9 bg-background'
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    updateFilters({ q: searchQuery, page: 1 })
+                  }
+                }}
+              />
+            </div>
+            <div className='text-xs text-muted-foreground'>
+              Showing {collections.length} of {pagination?.totalCount || 0}{' '}
+              collections
+            </div>
+          </div>
+          <div className='overflow-x-auto'>
+            <table className='w-full text-sm text-left'>
+              <thead className='text-xs text-muted-foreground uppercase bg-muted/50 border-b'>
+                <tr>
+                  <th
+                    className='px-6 py-4 font-medium uppercase tracking-wider cursor-pointer hover:bg-muted/60 transition-colors'
+                    onClick={() => toggleSort('name')}
+                  >
+                    <div className='flex items-center'>
+                      Collection
+                      {renderSortIcon('name')}
+                    </div>
+                  </th>
+                  <th className='px-6 py-4 font-medium uppercase tracking-wider'>
+                    Slug
+                  </th>
+                  <th className='px-6 py-4 font-medium uppercase tracking-wider'>
+                    Type
+                  </th>
+                  {isSystemGlobal && (
+                    <th className='px-6 py-4 font-medium uppercase tracking-wider'>
+                      Tenant
+                    </th>
+                  )}
+                  <th className='px-6 py-4 font-medium uppercase tracking-wider text-center'>
+                    Fields
+                  </th>
+                  <th
+                    className='px-6 py-4 font-medium uppercase tracking-wider cursor-pointer hover:bg-muted/60 transition-colors'
+                    onClick={() => toggleSort('createdAt')}
+                  >
+                    <div className='flex items-center'>
+                      Created
+                      {renderSortIcon('createdAt')}
+                    </div>
+                  </th>
+                  <th className='px-6 py-4 font-medium uppercase tracking-wider text-right'>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className='divide-y'>
+                {collections.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={isSystemGlobal ? 7 : 6}
+                      className='px-6 py-12 text-center text-muted-foreground'
+                    >
+                      <LayersIcon className='w-12 h-12 mx-auto mb-4 opacity-20' />
+                      <p className='text-lg font-medium'>
+                        No collections found
+                      </p>
+                      <p className='text-sm opacity-70 mt-1'>
+                        Create your first collection to start managing content.
+                      </p>
+                      <Button variant='outline' className='mt-4' asChild>
+                        <Link href='/collections/add'>Add Collection</Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ) : (
+                  collections.map((collection) => (
+                    <tr
+                      key={collection.id}
+                      className='hover:bg-muted/50 transition-colors group'
+                    >
+                      <td className='px-6 py-4'>
+                        <div className='flex items-center lg:space-x-3'>
+                          <span className='font-semibold text-foreground text-base'>
+                            {collection.name}
+                          </span>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4'>{collection.slug}</td>
+                      <td className='px-6 py-4 capitalize'>
+                        {collection.type}
+                      </td>
+                      {isSystemGlobal && (
+                        <td className='px-6 py-4 whitespace-nowrap'>
+                          {collection.tenant?.name || 'System Global'}
+                        </td>
+                      )}
+                      <td className='px-6 py-4'>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className='inline-flex min-w-20 justify-center items-center px-2.5 py-0.5 rounded-full text-xs text-center font-medium bg-blue-500/10 text-blue-600 border border-blue-500/20 dark:text-blue-400 cursor-help transition-colors hover:bg-blue-500/20'>
+                                {collection.fields?.length || 0} Fields
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{renderFieldsTooltip(collection.fields)}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                      <td className='px-6 py-4 text-muted-foreground whitespace-nowrap'>
+                        <div className='flex items-center space-x-2'>
+                          <CalendarIcon className='w-3.5 h-3.5 opacity-50' />
+                          <span>
+                            {new Date(
+                              collection.createdAt
+                            ).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </td>
+                      <td className='px-6 py-4 text-right space-x-2 whitespace-nowrap'>
+                        <Button variant='outline' size='sm' asChild>
+                          <Link
+                            href={
+                              collection.type === 'global'
+                                ? `/globals/${collection.slug}`
+                                : `/entries/${collection.id}`
+                            }
+                          >
+                            {collection.type === 'global'
+                              ? 'Content'
+                              : 'Entries'}
+                          </Link>
+                        </Button>
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          asChild
+                          title='Edit Schema'
+                        >
+                          <Link href={`/collections/edit/${collection.id}`}>
+                            Edit Schema
+                          </Link>
+                        </Button>
+                        <Button
+                          variant='destructive'
+                          size='sm'
+                          onClick={() => handleDelete(collection.id)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {pagination && pagination.totalPages > 1 && (
+            <div className='px-6 py-4 bg-muted/30 border-t flex items-center justify-between'>
+              <div className='text-xs text-muted-foreground'>
+                Showing {(currentPage - 1) * pagination.limit + 1} to{' '}
+                {Math.min(
+                  currentPage * pagination.limit,
+                  pagination.totalCount
+                )}{' '}
+                of {pagination.totalCount} collections
+              </div>
+              <div className='flex items-center space-x-2'>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  disabled={currentPage <= 1}
+                  onClick={() => handlePageChange(currentPage - 1)}
+                >
+                  <ChevronLeft className='h-4 w-4 mr-1' />
+                  Previous
+                </Button>
+                <div className='text-xs font-medium'>
+                  Page {currentPage} of {pagination.totalPages}
+                </div>
+                <Button
+                  variant='outline'
+                  size='sm'
+                  disabled={currentPage >= pagination.totalPages}
+                  onClick={() => handlePageChange(currentPage + 1)}
+                >
+                  Next
+                  <ChevronRight className='h-4 w-4 ml-1' />
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  )
+}

@@ -1,0 +1,2178 @@
+import Layout from '@/components/Layout'
+import MediaPicker from '@/components/MediaPicker'
+import RichTextEditor from '@/components/RichTextEditor'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
+import { FieldDefinition } from '@/lib/dynamic-schema'
+import { cn } from '@/lib/utils'
+import { Link, router, usePage } from '@inertiajs/react'
+import {
+  AlignLeft,
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  CheckSquare,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  CircleDot,
+  Clock,
+  CopyIcon,
+  DatabaseIcon,
+  FileJson,
+  FileText,
+  Fingerprint,
+  Hash,
+  History,
+  Image as ImageIcon,
+  ImagePlus,
+  Layers,
+  Link as LinkIcon,
+  List,
+  Loader2Icon,
+  Mail,
+  PanelRight,
+  PanelRightClose,
+  RotateCcw,
+  Save,
+  Send,
+  Terminal,
+  TerminalIcon,
+  Type,
+  User,
+  XIcon,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import React, { useCallback, useEffect, useState } from 'react'
+
+interface Collection {
+  id: number
+  name: string
+  slug: string
+  type: 'collection' | 'global'
+  fields: FieldDefinition[]
+}
+
+interface Entry {
+  id: number
+  content: Record<string, any>
+  status: 'published' | 'draft'
+  createdAt: string
+  updatedAt: string
+  tenant?: { id: number; name: string }
+  createdBy?: { id: number; name: string }
+}
+
+interface FormProps {
+  collection: {
+    id: number
+    name: string
+    slug: string
+    type: 'collection' | 'global'
+    localized?: boolean
+    fields: FieldDefinition[]
+  }
+  entry?: Entry & { locale?: string; translationGroupId?: string }
+  updatedBy?: { id: number; name: string }
+  user?: any
+  mode: 'create' | 'edit'
+  locales?: { id: number; code: string; name: string; isDefault: boolean }[]
+  existingTranslations?: Record<string, number>
+  translationGroupId?: string
+  sourceEntry?: Entry
+}
+
+const fieldTypeColors: Record<string, string> = {
+  text: 'text-blue-600 bg-blue-50/50 border-blue-200/50 dark:text-blue-400 dark:bg-blue-950/20 dark:border-blue-900/30',
+  textarea:
+    'text-indigo-600 bg-indigo-50/50 border-indigo-200/50 dark:text-indigo-400 dark:bg-indigo-950/20 dark:border-indigo-900/30',
+  email:
+    'text-sky-600 bg-sky-50/50 border-sky-200/50 dark:text-sky-400 dark:bg-sky-950/20 dark:border-sky-900/30',
+  number:
+    'text-emerald-600 bg-emerald-50/50 border-emerald-200/50 dark:text-emerald-400 dark:bg-emerald-950/20 dark:border-emerald-900/30',
+  select:
+    'text-orange-600 bg-orange-50/50 border-orange-200/50 dark:text-orange-400 dark:bg-orange-950/20 dark:border-orange-900/30',
+  checkbox:
+    'text-amber-600 bg-amber-50/50 border-amber-200/50 dark:text-amber-400 dark:bg-amber-950/20 dark:border-amber-900/30',
+  radio:
+    'text-orange-700 bg-orange-100/50 border-orange-200/50 dark:text-orange-400 dark:bg-orange-950/20 dark:border-orange-900/30',
+  boolean:
+    'text-green-700 bg-green-100/50 border-green-200/50 dark:text-green-400 dark:bg-green-950/20 dark:border-green-900/30',
+  date: 'text-purple-600 bg-purple-50/50 border-purple-200/50 dark:text-purple-400 dark:bg-purple-950/20 dark:border-purple-900/30',
+  datetime:
+    'text-fuchsia-600 bg-fuchsia-50/50 border-fuchsia-200/50 dark:text-fuchsia-400 dark:bg-fuchsia-950/20 dark:border-fuchsia-900/30',
+  time: 'text-violet-600 bg-violet-50/50 border-violet-200/50 dark:text-violet-400 dark:bg-violet-950/20 dark:border-violet-900/30',
+  media:
+    'text-pink-600 bg-pink-50/50 border-pink-200/50 dark:text-pink-400 dark:bg-pink-950/20 dark:border-pink-900/30',
+  documents:
+    'text-rose-600 bg-rose-50/50 border-rose-200/50 dark:text-rose-400 dark:bg-rose-950/20 dark:border-rose-900/30',
+  'rich-text':
+    'text-cyan-600 bg-cyan-50/50 border-cyan-200/50 dark:text-cyan-400 dark:bg-cyan-950/20 dark:border-cyan-900/30',
+  relation:
+    'text-teal-600 bg-teal-50/50 border-teal-200/50 dark:text-teal-400 dark:bg-teal-950/20 dark:border-teal-900/30',
+  slug: 'text-blue-700 bg-blue-100/50 border-blue-200/50 dark:text-blue-400 dark:bg-blue-950/20 dark:border-blue-900/30',
+  array:
+    'text-amber-700 bg-amber-100/50 border-amber-200/50 dark:text-amber-400 dark:bg-amber-950/20 dark:border-amber-900/30',
+  group:
+    'text-violet-700 bg-violet-100/50 border-violet-200/50 dark:text-violet-400 dark:bg-violet-950/20 dark:border-violet-900/30',
+}
+
+const GroupFieldInput = ({
+  field,
+  value,
+  onChange,
+  error,
+  relationData,
+  availableDocuments,
+  onMediaPickerOpen,
+}: {
+  field: FieldDefinition
+  value: any
+  onChange: (val: any) => void
+  error?: any
+  relationData: Record<number, any[]>
+  availableDocuments: any[]
+  onMediaPickerOpen: (
+    name: string,
+    multiple?: boolean,
+    customSelect?: (items: any[]) => void
+  ) => void
+}) => {
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const groupValue = value || {}
+
+  return (
+    <div className='border border-border/80 rounded-xl overflow-hidden shadow-sm bg-card space-y-0 animate-in fade-in slide-in-from-top-1 duration-200'>
+      {/* Header Bar */}
+      <div
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className='flex items-center justify-between px-8 py-4 bg-muted/40 border-b border-border/50 cursor-pointer select-none hover:bg-muted/60 transition-colors'
+      >
+        <div className='flex items-center gap-2.5'>
+          <Button
+            type='button'
+            variant='ghost'
+            size='icon'
+            className='h-6 w-6 p-0 hover:bg-transparent text-muted-foreground/80'
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsCollapsed(!isCollapsed)
+            }}
+          >
+            <ChevronDown
+              className={cn(
+                'w-4 h-4 transition-transform duration-200',
+                isCollapsed && '-rotate-90'
+              )}
+            />
+          </Button>
+          <Label className='text-xs font-bold uppercase tracking-widest text-foreground/90 cursor-pointer'>
+            {field.label || field.name}
+          </Label>
+          {field.required && (
+            <span className='text-destructive text-sm font-bold'>*</span>
+          )}
+        </div>
+        <div
+          className={cn(
+            'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold uppercase tracking-wider border transition-colors',
+            fieldTypeColors.group
+          )}
+        >
+          <Layers className='w-3 h-3' />
+          <span>Group</span>
+        </div>
+      </div>
+
+      {/* Child Fields Container */}
+      {!isCollapsed && (
+        <div className='p-8 space-y-8 bg-card animate-in fade-in slide-in-from-top-1 duration-200'>
+          {field.fields?.map((childField) => {
+            const childError = error
+              ? (error as any)[childField.name]?._errors?.[0]
+              : undefined
+            return (
+              <div key={childField.id} className='space-y-2 text-left'>
+                <div className='flex items-center justify-between border-b border-border/30 pb-1'>
+                  <Label className='text-xs font-bold uppercase tracking-widest text-muted-foreground/80'>
+                    {childField.label || childField.name}{' '}
+                    {childField.required && (
+                      <span className='text-destructive'>*</span>
+                    )}
+                  </Label>
+                  <div
+                    className={cn(
+                      'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold uppercase tracking-wider border transition-colors',
+                      fieldTypeColors[childField.type] ||
+                        'text-muted-foreground bg-muted border-border'
+                    )}
+                  >
+                    {(() => {
+                      const icons: Record<string, any> = {
+                        text: Type,
+                        textarea: AlignLeft,
+                        email: Mail,
+                        number: Hash,
+                        select: List,
+                        checkbox: CheckSquare,
+                        radio: CircleDot,
+                        boolean: CheckCircle2,
+                        date: Calendar,
+                        datetime: Clock,
+                        time: Clock,
+                        media: ImageIcon,
+                        documents: FileText,
+                        'rich-text': FileJson,
+                        relation: LinkIcon,
+                        slug: Fingerprint,
+                        array: Layers,
+                        group: Layers,
+                      }
+                      const Icon = icons[childField.type] || Type
+                      return <Icon className='w-3 h-3' />
+                    })()}
+                    <span>
+                      {childField.type === 'rich-text'
+                        ? 'Rich Text'
+                        : childField.type}
+                    </span>
+                  </div>
+                </div>
+                <FieldInput
+                  field={childField}
+                  value={groupValue[childField.name]}
+                  onChange={(val) => {
+                    const nextValue = {
+                      ...groupValue,
+                      [childField.name]: val,
+                    }
+                    onChange(nextValue)
+                  }}
+                  error={childError}
+                  relationData={relationData}
+                  availableDocuments={availableDocuments}
+                  onMediaPickerOpen={(name, multiple, customSelect) => {
+                    onMediaPickerOpen(name, multiple, (mediaItems) => {
+                      const val = multiple ? mediaItems : mediaItems[0]
+                      const nextValue = {
+                        ...groupValue,
+                        [childField.name]: val,
+                      }
+                      onChange(nextValue)
+                    })
+                  }}
+                />
+                {childField.helperText && !['text', 'textarea'].includes(childField.type) && (
+                  <p className='text-xs text-muted-foreground mt-1 italic'>
+                    {childField.helperText}
+                  </p>
+                )}
+                {childError && (
+                  <p className='text-xs font-medium text-destructive mt-1'>
+                    {childError}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const FieldInput = ({
+  field,
+  value,
+  onChange,
+  error,
+  relationData,
+  availableDocuments,
+  onMediaPickerOpen,
+}: {
+  field: FieldDefinition
+  value: any
+  onChange: (val: any) => void
+  error?: any
+  relationData: Record<number, any[]>
+  availableDocuments: any[]
+  onMediaPickerOpen: (
+    name: string,
+    multiple?: boolean,
+    customSelect?: (items: any[]) => void
+  ) => void
+}) => {
+  const handleValueChange = (val: any) => {
+    onChange(val)
+  }
+
+  switch (field.type) {
+    case 'text':
+      return (
+        <div className='space-y-1'>
+          <Input
+            value={value || ''}
+            onChange={(e) => handleValueChange(e.target.value)}
+            placeholder={`Enter ${field.label || field.name}`}
+            className={error ? 'border-destructive' : ''}
+            minLength={field.validation?.minLength}
+            maxLength={field.validation?.maxLength}
+          />
+          {(field.helperText || field.validation?.maxLength !== undefined) && (
+            <div className='flex items-start justify-between gap-4 mt-1 text-muted-foreground'>
+              <p className='text-xs italic flex-1 text-muted-foreground'>
+                {field.helperText || ''}
+              </p>
+              {field.validation?.maxLength !== undefined && (
+                <span className='text-[10px] shrink-0 self-start mt-0.5'>
+                  {(value || '').length}/{field.validation.maxLength}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )
+
+    case 'email':
+      return (
+        <Input
+          type='email'
+          value={value || ''}
+          onChange={(e) => handleValueChange(e.target.value)}
+          placeholder={`Enter ${field.label || field.name}`}
+          className={error ? 'border-destructive' : ''}
+        />
+      )
+
+    case 'textarea':
+      return (
+        <div className='space-y-1'>
+          <Textarea
+            value={value || ''}
+            onChange={(e) => handleValueChange(e.target.value)}
+            placeholder={`Enter ${field.label || field.name}`}
+            className={error ? 'border-destructive' : ''}
+            rows={5}
+            minLength={field.validation?.minLength}
+            maxLength={field.validation?.maxLength}
+          />
+          {(field.helperText || field.validation?.maxLength !== undefined) && (
+            <div className='flex items-start justify-between gap-4 mt-1 text-muted-foreground'>
+              <p className='text-xs italic flex-1 text-muted-foreground'>
+                {field.helperText || ''}
+              </p>
+              {field.validation?.maxLength !== undefined && (
+                <span className='text-[10px] shrink-0 self-start mt-0.5'>
+                  {(value || '').length}/{field.validation.maxLength}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )
+
+    case 'rich-text':
+      return (
+        <RichTextEditor
+          value={value || ''}
+          onChange={(val) => handleValueChange(val)}
+        />
+      )
+
+    case 'boolean':
+      return (
+        <div className='flex items-center space-x-2 pt-2'>
+          <Switch
+            id={field.id}
+            checked={!!value}
+            onCheckedChange={(checked) => handleValueChange(checked)}
+          />
+          <Label
+            htmlFor={field.id}
+            className='text-xs text-muted-foreground font-normal cursor-pointer select-none'
+          >
+            {value ? 'Active / Yes' : 'Inactive / No'}
+          </Label>
+        </div>
+      )
+
+    case 'number':
+      return (
+        <Input
+          type='number'
+          value={value ?? ''}
+          onChange={(e) =>
+            handleValueChange(
+              e.target.value === '' ? undefined : Number(e.target.value)
+            )
+          }
+          min={field.validation?.min}
+          max={field.validation?.max}
+          step={field.validation?.step || 'any'}
+          className={error ? 'border-destructive' : ''}
+        />
+      )
+
+    case 'date':
+    case 'datetime':
+    case 'time':
+      return (
+        <Input
+          type={field.type === 'datetime' ? 'datetime-local' : field.type}
+          value={value || ''}
+          onChange={(e) => handleValueChange(e.target.value)}
+          className={error ? 'border-destructive' : ''}
+        />
+      )
+
+    case 'select':
+      return (
+        <Select
+          value={value || ''}
+          onValueChange={(val) => handleValueChange(val)}
+        >
+          <SelectTrigger className={error ? 'border-destructive' : ''}>
+            <SelectValue placeholder={`Select ${field.label || field.name}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {field.options?.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+
+    case 'radio':
+      return (
+        <RadioGroup
+          value={value || ''}
+          onValueChange={(val) => handleValueChange(val)}
+          className='flex flex-col space-y-2 pt-1'
+        >
+          {field.options?.map((opt) => (
+            <div key={opt.value} className='flex items-center space-x-2'>
+              <RadioGroupItem
+                value={opt.value}
+                id={`${field.id}-${opt.value}`}
+              />
+              <Label
+                htmlFor={`${field.id}-${opt.value}`}
+                className='font-normal cursor-pointer text-xs'
+              >
+                {opt.label}
+              </Label>
+            </div>
+          ))}
+        </RadioGroup>
+      )
+
+    case 'checkbox': {
+      const currentVals = Array.isArray(value) ? value : []
+      return (
+        <div className='flex flex-col space-y-3 pt-1'>
+          {field.options?.map((opt) => (
+            <div key={opt.value} className='flex items-center space-x-2'>
+              <Checkbox
+                id={`${field.id}-${opt.value}`}
+                checked={currentVals.includes(opt.value)}
+                onCheckedChange={(checked) => {
+                  const next = checked
+                    ? [...currentVals, opt.value]
+                    : currentVals.filter((v) => v !== opt.value)
+                  handleValueChange(next)
+                }}
+              />
+              <Label
+                htmlFor={`${field.id}-${opt.value}`}
+                className='font-normal cursor-pointer text-xs'
+              >
+                {opt.label}
+              </Label>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    case 'media': {
+      const mediaArray = Array.isArray(value) ? value : value ? [value] : []
+      const handleMediaUpdate = (next: any) => {
+        handleValueChange(field.multiple ? next : next[0] || null)
+      }
+
+      return (
+        <div className='space-y-4'>
+          <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4'>
+            {mediaArray.map((m: any, idx: number) => (
+              <div
+                key={idx}
+                className='group relative aspect-square rounded-lg border overflow-hidden bg-muted transition-all hover:ring-2 hover:ring-primary/50'
+              >
+                <img
+                  src={
+                    m.resourceType === 'video'
+                      ? m.secureUrl.replace(/\.[^/.]+$/, '.jpg')
+                      : m.secureUrl
+                  }
+                  alt={m.filename}
+                  className='w-full h-full object-cover'
+                />
+                <button
+                  type='button'
+                  onClick={() => {
+                    const next = mediaArray.filter((_, i) => i !== idx)
+                    handleMediaUpdate(next)
+                  }}
+                  className='absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-20 hover:scale-110 active:scale-95'
+                  title='Remove'
+                >
+                  <XIcon className='w-3 h-3' />
+                </button>
+
+                {field.multiple && mediaArray.length > 1 && (
+                  <div className='absolute inset-x-0 bottom-1 flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20'>
+                    <button
+                      type='button'
+                      disabled={idx === 0}
+                      onClick={() => {
+                        if (idx === 0) return
+                        const next = [...mediaArray]
+                        ;[next[idx], next[idx - 1]] = [next[idx - 1], next[idx]]
+                        handleMediaUpdate(next)
+                      }}
+                      className='bg-background/90 text-foreground border rounded-sm p-1 shadow-sm hover:bg-primary hover:text-primary-foreground disabled:opacity-0 disabled:pointer-events-none transition-all'
+                      title='Move Left'
+                    >
+                      <ChevronLeft className='w-3 h-3' />
+                    </button>
+                    <button
+                      type='button'
+                      disabled={idx === mediaArray.length - 1}
+                      onClick={() => {
+                        if (idx === mediaArray.length - 1) return
+                        const next = [...mediaArray]
+                        ;[next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]
+                        handleMediaUpdate(next)
+                      }}
+                      className='bg-background/90 text-foreground border rounded-sm p-1 shadow-sm hover:bg-primary hover:text-primary-foreground disabled:opacity-0 disabled:pointer-events-none transition-all'
+                      title='Move Right'
+                    >
+                      <ChevronRight className='w-3 h-3' />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            {(field.multiple || mediaArray.length === 0) && (
+              <button
+                type='button'
+                onClick={() => onMediaPickerOpen(field.name, field.multiple)}
+                className='flex flex-col items-center justify-center aspect-square border-2 border-dashed rounded-lg hover:border-primary hover:bg-accent/50 transition-all text-muted-foreground hover:text-primary group'
+              >
+                <ImagePlus className='w-4 h-4 mb-1' />
+                <span className='text-[10px] font-medium'>Add Media</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    case 'relation': {
+      const options = field.relationCollectionId
+        ? relationData[field.relationCollectionId] || []
+        : []
+      return (
+        <Select
+          value={value?.toString() || ''}
+          onValueChange={(val) => handleValueChange(parseInt(val))}
+        >
+          <SelectTrigger className={error ? 'border-destructive' : ''}>
+            <SelectValue placeholder={`Select ${field.label || field.name}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {options.map((entry) => (
+              <SelectItem key={entry.id} value={entry.id.toString()}>
+                {field.relationLabelField
+                  ? entry.content[field.relationLabelField]
+                  : `Entry #${entry.id}`}
+              </SelectItem>
+            ))}
+            {options.length === 0 && (
+              <div className='p-2 text-xs text-muted-foreground text-center italic'>
+                No entries found
+              </div>
+            )}
+          </SelectContent>
+        </Select>
+      )
+    }
+
+    case 'documents':
+      return (
+        <Select
+          value={
+            value?.id?.toString() ||
+            (typeof value === 'number' ? value.toString() : '')
+          }
+          onValueChange={(val) => {
+            const id = parseInt(val, 10)
+            const doc = availableDocuments.find((d) => d.id === id)
+            handleValueChange(doc || id)
+          }}
+        >
+          <SelectTrigger className={error ? 'border-destructive' : ''}>
+            <SelectValue placeholder={`Select ${field.label || field.name}`} />
+          </SelectTrigger>
+          <SelectContent>
+            {availableDocuments.map((doc) => (
+              <SelectItem key={doc.id} value={doc.id.toString()}>
+                <div className='flex items-center'>
+                  <FileText className='w-3 h-3 mr-2 opacity-50' />
+                  {doc.filename}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )
+
+    case 'slug':
+      return field.enableCopyButton ? (
+        <div className='flex items-center gap-2'>
+          <Input
+            value={value || ''}
+            onChange={(e) => handleValueChange(e.target.value)}
+            placeholder={`Enter ${field.label || field.name}`}
+            className={cn('flex-1', error ? 'border-destructive' : '')}
+          />
+          <Button
+            type='button'
+            variant='outline'
+            size='icon'
+            className='h-9 w-9 shrink-0 hover:bg-muted/80'
+            onClick={() => {
+              if (value) {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(value)
+                  toast.success('Slug copied to clipboard')
+                } else {
+                  const textarea = document.createElement('textarea')
+                  textarea.value = value
+                  textarea.style.position = 'fixed'
+                  document.body.appendChild(textarea)
+                  textarea.select()
+                  try {
+                    document.execCommand('copy')
+                    toast.success('Slug copied to clipboard')
+                  } catch (err) {
+                    toast.error('Failed to copy slug')
+                  }
+                  document.body.removeChild(textarea)
+                }
+              } else {
+                toast.error('No slug value to copy')
+              }
+            }}
+            disabled={!value}
+            title='Copy slug to clipboard'
+          >
+            <CopyIcon className='h-4 w-4' />
+          </Button>
+        </div>
+      ) : (
+        <Input
+          value={value || ''}
+          onChange={(e) => handleValueChange(e.target.value)}
+          placeholder={`Enter ${field.label || field.name}`}
+          className={error ? 'border-destructive' : ''}
+        />
+      )
+
+    case 'array': {
+      const items = Array.isArray(value) ? value : []
+      return (
+        <div className='space-y-4'>
+          {items.map((item: any, itemIndex: number) => (
+            <div
+              key={itemIndex}
+              className='relative p-6 border rounded-xl bg-muted/4 shadow-inner space-y-6 group animate-in fade-in slide-in-from-top-2 duration-300'
+            >
+              <div className='flex justify-between items-center mb-2'>
+                <span className='text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-50'>
+                  {field.label || field.name} #{itemIndex + 1}
+                </span>
+                <div className='flex items-center space-x-1'>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    className='h-8 w-8 hover:bg-muted'
+                    onClick={() => {
+                      if (itemIndex === 0) return
+                      const next = [...items]
+                      ;[next[itemIndex], next[itemIndex - 1]] = [
+                        next[itemIndex - 1],
+                        next[itemIndex],
+                      ]
+                      handleValueChange(next)
+                    }}
+                    disabled={itemIndex === 0}
+                  >
+                    <ChevronUp className='w-4 h-4' />
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    className='h-8 w-8 hover:bg-muted'
+                    onClick={() => {
+                      if (itemIndex === items.length - 1) return
+                      const next = [...items]
+                      ;[next[itemIndex], next[itemIndex + 1]] = [
+                        next[itemIndex + 1],
+                        next[itemIndex],
+                      ]
+                      handleValueChange(next)
+                    }}
+                    disabled={itemIndex === items.length - 1}
+                  >
+                    <ChevronDown className='w-4 h-4' />
+                  </Button>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='icon'
+                    className='h-8 w-8 text-destructive hover:bg-destructive/10'
+                    onClick={() => {
+                      const next = items.filter((_, i) => i !== itemIndex)
+                      handleValueChange(next)
+                    }}
+                  >
+                    <XIcon className='w-4 h-4' />
+                  </Button>
+                </div>
+              </div>
+
+              <div className='space-y-6'>
+                {field.fields?.map((childField) => (
+                  <div key={childField.id} className='space-y-2 text-left'>
+                    <Label className='text-sm font-medium text-muted-foreground/80'>
+                      {childField.label || childField.name}{' '}
+                      {childField.required && (
+                        <span className='text-destructive'>*</span>
+                      )}
+                    </Label>
+                    <FieldInput
+                      field={childField}
+                      value={item[childField.name]}
+                      onChange={(val) => {
+                        const nextItems = [...items]
+                        nextItems[itemIndex] = {
+                          ...nextItems[itemIndex],
+                          [childField.name]: val,
+                        }
+                        handleValueChange(nextItems)
+                      }}
+                      error={undefined} // could pass errors if we have deep mapping
+                      relationData={relationData}
+                      availableDocuments={availableDocuments}
+                      onMediaPickerOpen={(name, multiple, customSelect) => {
+                        onMediaPickerOpen(name, multiple, (mediaItems) => {
+                          const val = multiple ? mediaItems : mediaItems[0]
+                          const nextItems = [...items]
+                          nextItems[itemIndex] = {
+                            ...nextItems[itemIndex],
+                            [childField.name]: val,
+                          }
+                          handleValueChange(nextItems)
+                        })
+                      }}
+                    />
+                    {childField.helperText && !['text', 'textarea'].includes(childField.type) && (
+                      <p className='text-xs text-muted-foreground mt-1 italic'>
+                        {childField.helperText}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            className='w-full py-6 border-dashed border-2 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all group'
+            onClick={() => {
+              const newItem = (field.fields || []).reduce((acc: any, f) => {
+                acc[f.name] =
+                  f.type === 'boolean'
+                    ? false
+                    : f.type === 'number'
+                      ? 0
+                      : f.type === 'checkbox'
+                        ? []
+                        : ''
+                return acc
+              }, {})
+              handleValueChange([...items, newItem])
+            }}
+          >
+            <ImagePlus className='w-4 h-4 mr-2 group-hover:scale-110 transition-transform' />
+            Add Item to {field.label || 'List'}
+          </Button>
+        </div>
+      )
+    }
+
+    case 'group': {
+      return (
+        <GroupFieldInput
+          field={field}
+          value={value}
+          onChange={onChange}
+          error={error}
+          relationData={relationData}
+          availableDocuments={availableDocuments}
+          onMediaPickerOpen={onMediaPickerOpen}
+        />
+      )
+    }
+
+    default:
+      return (
+        <p className='text-xs text-destructive'>
+          Unsupported field type: {field.type}
+        </p>
+      )
+  }
+}
+
+export default function EntriesForm({
+  collection,
+  entry,
+  updatedBy,
+  user,
+  mode,
+  locales = [],
+  existingTranslations = {},
+  translationGroupId: initialGroupId,
+  sourceEntry,
+}: FormProps) {
+  const { props: pageProps } = usePage()
+  const activeTenant = (pageProps as any).activeTenant
+  const isSystemGlobal = !activeTenant
+  const initializeFormData = (content?: Record<string, any>) => {
+    const data: Record<string, any> = { ...(content || {}) }
+    if (collection?.fields) {
+      const applyDefaults = (target: any, fieldsList: any[]) => {
+        fieldsList.forEach((f) => {
+          if (f.type === 'boolean' && target[f.name] === undefined) {
+            target[f.name] = false
+          } else if (f.type === 'group' && f.fields) {
+            target[f.name] = target[f.name] || {}
+            applyDefaults(target[f.name], f.fields)
+          }
+        })
+      }
+      applyDefaults(data, collection.fields)
+    }
+    return data
+  }
+
+  const initialContent = initializeFormData(
+    entry?.content || sourceEntry?.content || {}
+  )
+
+  const [formData, setFormData] = useState<Record<string, any>>(initialContent)
+  const initialLocale =
+    entry?.locale ||
+    new URLSearchParams(window.location.search).get('locale') ||
+    locales.find((l) => l.isDefault)?.code ||
+    'en'
+  const [allDrafts, setAllDrafts] = useState<
+    Record<string, Record<string, any>>
+  >({
+    [initialLocale]: initialContent,
+  })
+  const [currentLocale, setCurrentLocale] = useState<string>(initialLocale)
+  const [translationGroupId, setTranslationGroupId] = useState<string | null>(
+    entry?.translationGroupId || initialGroupId || null
+  )
+  const [status, setStatus] = useState<'published' | 'draft'>(
+    entry?.status || 'published'
+  )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errors, setErrors] = useState<Record<string, any>>({})
+  const [availableDocuments, setAvailableDocuments] = useState<any[]>([])
+  const [activeMediaPickerField, setActiveMediaPickerField] = useState<
+    string | null
+  >(null)
+  const [mediaPickerMultiple, setMediaPickerMultiple] = useState<boolean>(false)
+  const [customMediaSelect, setCustomMediaSelect] = useState<
+    ((items: any[]) => void) | null
+  >(null)
+
+  const handleMediaPickerOpen = (
+    name: string,
+    multiple?: boolean,
+    customSelect?: (items: any[]) => void
+  ) => {
+    setActiveMediaPickerField(name)
+    setMediaPickerMultiple(!!multiple)
+    setCustomMediaSelect(() => customSelect || null)
+  }
+  const [versions, setVersions] = useState<any[]>([])
+  const [isSidebarOpen, setSidebarOpen] = useState(false)
+  const [isDetailsVisible, setIsDetailsVisible] = useState(true)
+  const [isPreviewingVersion, setPreviewingVersion] = useState<any | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  // API Preview State
+  const [isApiPreviewOpen, setIsApiPreviewOpen] = useState(false)
+  const [apiPreviewData, setApiPreviewData] = useState<any>(null)
+  const [isFetchingPreview, setIsFetchingPreview] = useState(false)
+  const [previewIncludeDrafts, setPreviewIncludeDrafts] = useState(false)
+
+  const fetchApiPreview = async (includeDrafts: boolean) => {
+    if (!entry?.id) return
+    setIsFetchingPreview(true)
+    try {
+      let url = `/api/entries/${entry.id}`
+      if (includeDrafts) {
+        url += '?status=all'
+      }
+      const res = await fetch(url)
+      if (res.ok) {
+        const data = await res.json()
+        setApiPreviewData(data)
+      } else {
+        setApiPreviewData(null)
+        if (res.status !== 404) {
+          toast.error('Failed to fetch API preview')
+        }
+      }
+    } catch (err) {
+      setApiPreviewData(null)
+      toast.error('Network error')
+    } finally {
+      setIsFetchingPreview(false)
+    }
+  }
+
+  useEffect(() => {
+    if (isApiPreviewOpen && mode === 'edit') {
+      fetchApiPreview(previewIncludeDrafts)
+    }
+  }, [isApiPreviewOpen, previewIncludeDrafts])
+
+  // Block navigation if there are unsaved changes
+  useEffect(() => {
+    if (!isDirty) return
+
+    const handleBefore = (event: any) => {
+      if (isSubmitting) return
+
+      if (
+        !confirm(
+          'You have unsaved changes. Are you sure you want to leave this page?'
+        )
+      ) {
+        event.preventDefault()
+      }
+    }
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isSubmitting) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+
+    const unbind = router.on('before', handleBefore)
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      unbind()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [isDirty, isSubmitting])
+
+  const fetchVersions = useCallback(async () => {
+    if (mode === 'edit' && entry?.id) {
+      try {
+        const res = await fetch(`/api/entries/${entry.id}/versions`)
+        if (res.ok) {
+          const data = await res.json()
+          setVersions(data.versions || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch versions', err)
+      }
+    }
+  }, [mode, entry?.id])
+
+  useEffect(() => {
+    let isMounted = true
+    if (mode === 'edit' && entry?.id && isMounted) {
+      fetchVersions()
+    }
+    return () => {
+      isMounted = false
+    }
+  }, [mode, entry?.id, fetchVersions])
+
+  const handleRevert = async (version: any) => {
+    if (
+      !confirm(
+        `Are you sure you want to revert to version #${version.versionNumber}? Current unsaved changes will be lost.`
+      )
+    )
+      return
+
+    try {
+      const res = await fetch(
+        `/api/entries/${entry?.id}/versions/${version.id}/revert`,
+        {
+          method: 'POST',
+        }
+      )
+
+      if (res.ok) {
+        setIsDirty(false)
+        const result = await res.json()
+        setFormData(result.entry.content)
+        setPreviewingVersion(null)
+        setSidebarOpen(false)
+        toast.success(
+          'Successfully reverted to version #' + version.versionNumber
+        )
+        fetchVersions()
+      } else {
+        toast.error('Failed to revert')
+      }
+    } catch (err) {
+      toast.error('Network error during revert')
+    }
+  }
+
+  const slugify = (text: string) => {
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-') // Replace spaces with -
+      .replace(/[^\w-]+/g, '') // Remove all non-word chars
+      .replace(/--+/g, '-') // Replace multiple - with single -
+  }
+
+  const handleFieldChange = (name: string, value: any) => {
+    setIsDirty(true)
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value }
+
+      // Auto-fill slug fields
+      collection.fields.forEach((field) => {
+        if (field.type === 'slug' && field.slugSourceField === name) {
+          next[field.name] = slugify(value || '')
+        }
+      })
+
+      // Update drafts as well
+      setAllDrafts((prevDrafts) => ({
+        ...prevDrafts,
+        [currentLocale]: next,
+      }))
+
+      return next
+    })
+    // Clear error for this field
+    if (errors[currentLocale] && errors[currentLocale][name]) {
+      const newErrors = { ...errors }
+      newErrors[currentLocale] = { ...newErrors[currentLocale] }
+      delete newErrors[currentLocale][name]
+      setErrors(newErrors)
+    }
+  }
+
+  const handleSubmit = async (
+    e?: React.FormEvent,
+    statusOverride?: 'published' | 'draft'
+  ) => {
+    if (e) e.preventDefault()
+    setIsSubmitting(true)
+    setErrors({})
+
+    const finalStatus = statusOverride || status
+
+    const url =
+      mode === 'create'
+        ? `/api/collections/${collection.id}/entries`
+        : `/api/entries/${entry?.id}`
+
+    const method = mode === 'create' ? 'POST' : 'PUT'
+
+    // Prepare payload
+    const payload: any = {
+      status: finalStatus,
+      translationGroupId: translationGroupId,
+    }
+
+    if (mode === 'create' && collection.localized) {
+      payload.locales = allDrafts
+      payload.currentLocale = currentLocale
+    } else {
+      Object.assign(payload, formData)
+      payload.locale = currentLocale
+    }
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+
+      const result = await res.json()
+
+      if (!res.ok) {
+        if (result.error === 'Validation failed' && result.details) {
+          if (result.isBulk) {
+            // Flatten errors for the active locale or just set the whole thing
+            // For simplicity in the UI, we'll store the whole details object in errors
+            // and adapt the FieldInput to read from it if it's bulk
+            setErrors(result.details)
+            toast.error('Validation failed in one or more languages')
+          } else {
+            setErrors({
+              [currentLocale]: result.details,
+            })
+            toast.error('Please check the form for errors')
+          }
+        } else {
+          toast.error(result.error || 'Failed to save entry')
+        }
+        setIsSubmitting(false)
+        return
+      }
+
+      toast.success(
+        mode === 'create'
+          ? 'Entry created successfully'
+          : 'Entry updated successfully'
+      )
+
+      setIsDirty(false)
+      if (mode === 'create' && result.entry) {
+        window.location.href = `/entries/${collection.id}/edit/${result.entry.id}`
+      } else {
+        window.location.href = `/entries/${collection.id}`
+      }
+    } catch (err) {
+      toast.error('Network error')
+      setIsSubmitting(false)
+    }
+  }
+
+  const [relationData, setRelationData] = useState<Record<number, any[]>>({})
+
+  useEffect(() => {
+    const fetchRelations = async () => {
+      const relationFields = collection.fields.filter(
+        (f) => f.type === 'relation' && f.relationCollectionId
+      )
+
+      for (const field of relationFields) {
+        const id = field.relationCollectionId!
+        if (relationData[id]) continue
+
+        try {
+          const res = await fetch(`/api/collections/${id}/entries`)
+          if (res.ok) {
+            const data = await res.json()
+            setRelationData((prev) => ({ ...prev, [id]: data.entries || [] }))
+          }
+        } catch (err) {
+          console.error(
+            `Failed to fetch relation data for collection ${id}`,
+            err
+          )
+        }
+      }
+    }
+
+    fetchRelations()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collection.fields])
+
+  useEffect(() => {
+    const fetchDocuments = async () => {
+      const hasDocumentField = collection.fields.some(
+        (f) => f.type === 'documents'
+      )
+      if (!hasDocumentField) return
+
+      try {
+        const res = await fetch('/api/documents?limit=100') // Fetch more for selection
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableDocuments(data.files || [])
+        }
+      } catch (err) {
+        console.error('Failed to fetch documents', err)
+      }
+    }
+
+    fetchDocuments()
+  }, [collection.fields])
+
+  const handleMediaSelect = (mediaItems: any[]) => {
+    if (customMediaSelect) {
+      customMediaSelect(mediaItems)
+      setCustomMediaSelect(null)
+      setActiveMediaPickerField(null)
+      return
+    }
+
+    if (!activeMediaPickerField) return
+
+    const field = collection.fields.find(
+      (f) => f.name === activeMediaPickerField
+    )
+    if (!field) return
+
+    if (field.multiple) {
+      const current = formData[activeMediaPickerField] || []
+      const next = [...(Array.isArray(current) ? current : []), ...mediaItems]
+      // Optional: deduplicate by id
+      const unique = next.filter(
+        (v, i, a) => a.findIndex((t) => t.id === v.id) === i
+      )
+      handleFieldChange(activeMediaPickerField, unique)
+    } else {
+      handleFieldChange(activeMediaPickerField, mediaItems[0])
+    }
+  }
+
+  return (
+    <Layout
+      user={user}
+      title={`${mode === 'create' ? 'Add' : 'Edit'} ${collection.name} Entry | My CMS`}
+    >
+      <div className='space-y-6 pb-12'>
+        <div className='flex flex-col space-y-4 md:flex-row md:items-center md:justify-between md:space-y-0'>
+          <div className='flex items-center space-x-4'>
+            <Button
+              variant='ghost'
+              size='icon'
+              asChild
+              className='rounded-full'
+            >
+              <Link href={`/entries/${collection.id}`}>
+                <ArrowLeft className='w-5 h-5' />
+              </Link>
+            </Button>
+            <div>
+              <h1 className='text-3xl font-bold tracking-tight'>
+                {mode === 'create' ? 'Add Entry' : 'Edit Entry'}
+              </h1>
+              <div className='flex flex-col md:flex-row md:items-center space-y-1.5 md:space-y-0 md:space-x-4 mt-1'>
+                <p className='text-muted-foreground text-sm'>
+                  Collection:{' '}
+                  <span className='font-semibold text-foreground'>
+                    {collection.name}
+                  </span>
+                </p>
+                {mode === 'edit' && updatedBy && (
+                  <>
+                    <span className='hidden md:inline text-muted-foreground/30'>
+                      •
+                    </span>
+                    <div className='flex items-center text-xs text-muted-foreground'>
+                      <User className='w-3 h-3 mr-1' />
+                      Last updated by{' '}
+                      <span className='font-semibold text-foreground ml-1'>
+                        {updatedBy.name}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {mode === 'edit' && (
+            <div className='flex flex-wrap items-center gap-2 w-full md:w-auto'>
+              <Dialog
+                open={isApiPreviewOpen}
+                onOpenChange={setIsApiPreviewOpen}
+              >
+                <DialogTrigger asChild>
+                  <Button variant='outline' size='sm'>
+                    <TerminalIcon className='w-4 h-4 mr-2' />
+                    API Preview
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className='max-w-3xl max-h-[90vh] flex flex-col'>
+                  <DialogHeader>
+                    <DialogTitle className='flex items-center'>
+                      <Terminal className='w-5 h-5 mr-2 text-primary' />
+                      API Documentation & Preview
+                    </DialogTitle>
+                    <DialogDescription>
+                      Interactive preview of the API responses for this specific
+                      entry.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <Tabs
+                    defaultValue='rest'
+                    className='flex-1 flex flex-col mt-4 overflow-hidden'
+                  >
+                    <TabsList className='grid w-full grid-cols-2 mb-4'>
+                      <TabsTrigger value='rest' className='flex items-center'>
+                        <Terminal className='w-4 h-4 mr-2' />
+                        REST API
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value='graphql'
+                        className='flex items-center'
+                      >
+                        <DatabaseIcon className='w-4 h-4 mr-2' />
+                        GraphQL API
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent
+                      value='rest'
+                      className='flex-1 flex flex-col overflow-hidden m-0'
+                    >
+                      <div className='flex items-center space-x-3 bg-muted/10 p-3.5 rounded-lg border border-border/40 text-xs mb-3'>
+                        <input
+                          id='include-drafts'
+                          type='checkbox'
+                          checked={previewIncludeDrafts}
+                          onChange={(e) =>
+                            setPreviewIncludeDrafts(e.target.checked)
+                          }
+                          className='h-4 w-4 rounded border-zinc-800 bg-zinc-950 text-primary focus:ring-primary focus:ring-offset-zinc-950 accent-primary cursor-pointer'
+                        />
+                        <label
+                          htmlFor='include-drafts'
+                          className='font-medium leading-none text-muted-foreground hover:text-foreground transition-colors cursor-pointer select-none'
+                        >
+                          Include Draft Entries{' '}
+                          <span className='opacity-60 font-normal'>
+                            (Appends{' '}
+                            <code className='text-[10px] font-mono bg-muted/50 px-1 py-0.5 rounded'>
+                              ?status=all
+                            </code>{' '}
+                            to query)
+                          </span>
+                        </label>
+                      </div>
+
+                      <div className='relative overflow-hidden rounded-xl border border-white/10 bg-zinc-950 group h-[400px] flex flex-col'>
+                        {/* Decorative Glow */}
+                        <div className='absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-blue-500/30 rounded-full blur-[80px] group-hover:blur-[100px] transition-all duration-500 pointer-events-none' />
+
+                        <ScrollArea className='flex-1 p-4 font-mono text-sm text-zinc-300 bg-transparent'>
+                          <div className='relative z-10'>
+                            {isFetchingPreview ? (
+                              <div className='h-[366px] flex items-center justify-center text-zinc-500'>
+                                <Loader2Icon className='w-6 h-6 animate-spin mr-2' />
+                                Loading preview...
+                              </div>
+                            ) : apiPreviewData ? (
+                              <div>
+                                <div className='flex items-center justify-between mb-4 border-b border-white/5 pb-2'>
+                                  <div className='flex items-center space-x-2'>
+                                    <span className='px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-[10px] font-bold'>
+                                      GET
+                                    </span>
+                                    <code className='text-[10px] text-zinc-400'>
+                                      /api/entries/{entry?.id}
+                                      {previewIncludeDrafts
+                                        ? '?status=all'
+                                        : ''}
+                                    </code>
+                                  </div>
+                                  <div className='flex items-center space-x-2'>
+                                    <Button
+                                      variant='ghost'
+                                      size='sm'
+                                      className='h-7 text-[10px] text-zinc-400 hover:text-white hover:bg-white/5'
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(
+                                          JSON.stringify(
+                                            apiPreviewData,
+                                            null,
+                                            2
+                                          )
+                                        )
+                                        toast.success('Copied to clipboard')
+                                      }}
+                                    >
+                                      <CopyIcon className='w-3 h-3 mr-1.5' />
+                                      Copy JSON
+                                    </Button>
+                                    <Button
+                                      variant='ghost'
+                                      size='sm'
+                                      className='h-7 text-[10px] text-zinc-400 hover:text-white hover:bg-white/5'
+                                      onClick={() => {
+                                        const tenantId =
+                                          activeTenant?.id || 'YOUR_TENANT_ID'
+                                        const apiKey =
+                                          user?.apiKey || 'YOUR_API_KEY'
+                                        const url = `${window.location.origin}/api/entries/${entry?.id}${previewIncludeDrafts ? '?status=all' : ''}`
+                                        const curlCmd = `curl -X GET "${url}" \\\n  -H "Authorization: Bearer ${apiKey}" \\\n  -H "X-Tenant-ID: ${tenantId}"`
+                                        navigator.clipboard.writeText(curlCmd)
+                                        toast.success(
+                                          'cURL copied to clipboard'
+                                        )
+                                      }}
+                                    >
+                                      <TerminalIcon className='w-3 h-3 mr-1.5' />
+                                      Copy cURL
+                                    </Button>
+                                  </div>
+                                </div>
+                                <pre className='whitespace-pre-wrap break-all'>
+                                  {JSON.stringify(apiPreviewData, null, 2)}
+                                </pre>
+                              </div>
+                            ) : (
+                              <div className='h-[366px] flex flex-col items-center justify-center text-zinc-500 text-center px-6 py-8 space-y-2'>
+                                <span className='font-semibold text-zinc-400'>
+                                  No published data available for this entry.
+                                </span>
+                                <span className='text-xs text-zinc-500 max-w-sm leading-relaxed'>
+                                  This entry might be in draft status. Try
+                                  checking the{' '}
+                                  <strong>"Include Draft Entries"</strong>{' '}
+                                  option above to preview draft content.
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent
+                      value='graphql'
+                      className='flex-1 flex flex-col overflow-hidden space-y-4 m-0'
+                    >
+                      <div className='space-y-2'>
+                        <label className='text-[10px] font-bold uppercase tracking-widest opacity-50'>
+                          GraphQL Endpoint
+                        </label>
+                        <div className='flex space-x-2'>
+                          <Input
+                            readOnly
+                            value={`${window.location.origin}/api/graphql`}
+                            className='font-mono text-xs bg-muted/50 h-8'
+                          />
+                          <Button
+                            variant='secondary'
+                            size='icon'
+                            className='h-8 w-8'
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                `${window.location.origin}/api/graphql`
+                              )
+                              toast.success(
+                                'GraphQL endpoint copied to clipboard'
+                              )
+                            }}
+                          >
+                            <CopyIcon className='w-4 h-4' />
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className='grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 min-h-0'>
+                        <div className='flex flex-col space-y-2 overflow-hidden'>
+                          <div className='flex items-center justify-between'>
+                            <label className='text-[10px] font-bold uppercase tracking-widest opacity-50'>
+                              GraphQL Query
+                            </label>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-7 text-[10px]'
+                              onClick={() => {
+                                const query = `query {\n  entry(id: ${entry?.id}) {\n    id\n    content\n    status\n    locale\n    createdAt\n  }\n}`
+                                navigator.clipboard.writeText(query)
+                                toast.success('Query copied to clipboard')
+                              }}
+                            >
+                              <CopyIcon className='w-3 h-3 mr-1.5' />
+                              Copy Query
+                            </Button>
+                          </div>
+                          <div className='relative overflow-hidden rounded-md border bg-zinc-950 group flex-1 flex flex-col min-h-0'>
+                            {/* Decorative Glow */}
+                            <div className='absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-purple-500/30 rounded-full blur-[80px] group-hover:blur-[100px] transition-all duration-500 pointer-events-none' />
+
+                            <ScrollArea className='flex-1 p-4 font-mono text-[11px] text-zinc-400 bg-transparent'>
+                              <div className='relative z-10'>
+                                <pre className='whitespace-pre'>
+                                  {`query {\n  entry(id: ${entry?.id}) {\n    id\n    content\n    status\n    locale\n    createdAt\n  }\n}`}
+                                </pre>
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        </div>
+
+                        <div className='flex flex-col space-y-2 overflow-hidden flex-1'>
+                          <div className='flex items-center justify-between'>
+                            <label className='text-[10px] font-bold uppercase tracking-widest opacity-50'>
+                              Data Response
+                            </label>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='h-7 px-2 text-[10px]'
+                              onClick={() => {
+                                const json = JSON.stringify(
+                                  { data: { entry: apiPreviewData || {} } },
+                                  null,
+                                  2
+                                )
+                                navigator.clipboard.writeText(json)
+                                toast.success('JSON copied to clipboard')
+                              }}
+                            >
+                              <CopyIcon className='w-3 h-3 mr-1.5' />
+                              Copy JSON
+                            </Button>
+                          </div>
+
+                          <div className='relative overflow-hidden rounded-md border bg-zinc-950 group flex-1 flex flex-col min-h-0'>
+                            {/* Decorative Glow */}
+                            <div className='absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] bg-blue-500/30 rounded-full blur-[80px] group-hover:blur-[100px] transition-all duration-500 pointer-events-none' />
+
+                            <ScrollArea className='flex-1 p-4 font-mono text-[11px] text-zinc-300 bg-transparent'>
+                              <div className='relative z-10'>
+                                <pre className='whitespace-pre'>
+                                  {apiPreviewData
+                                    ? JSON.stringify(
+                                        { data: { entry: apiPreviewData } },
+                                        null,
+                                        2
+                                      )
+                                    : '// Requesting data...'}
+                                </pre>
+                              </div>
+                            </ScrollArea>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
+
+                  <div className='mt-4 p-3 bg-primary/5 border border-primary/20 rounded-lg flex items-start space-x-3'>
+                    <DatabaseIcon className='w-4 h-4 text-primary mt-0.5' />
+                    <div className='text-[11px] text-zinc-500 leading-relaxed'>
+                      <span className='font-bold text-primary'>
+                        External Request Tip:
+                      </span>{' '}
+                      When hitting the API from external apps (Mobile, Frontend,
+                      cURL), you must include the header{' '}
+                      <code className='text-primary font-mono'>
+                        X-Tenant-ID: {activeTenant?.id || '[TENANT_ID]'}
+                      </code>{' '}
+                      to authorize access to this workspace's data.
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                onClick={() => setSidebarOpen(true)}
+                className='relative'
+              >
+                <History className='w-4 h-4 mr-2' />
+                History
+                {versions.length > 0 && (
+                  <span className='absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] text-primary-foreground font-bold border-2 border-background'>
+                    {versions.length}
+                  </span>
+                )}
+              </Button>
+
+              <Button
+                type='button'
+                variant={isDetailsVisible ? 'secondary' : 'outline'}
+                size='sm'
+                onClick={() => setIsDetailsVisible(!isDetailsVisible)}
+                title={isDetailsVisible ? 'Hide Details' : 'Show Details'}
+                className='ml-auto md:ml-0'
+              >
+                {isDetailsVisible ? (
+                  <PanelRightClose className='w-4 h-4' />
+                ) : (
+                  <PanelRight className='w-4 h-4 mr-2' />
+                )}
+                {isDetailsVisible ? '' : 'Details'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {isPreviewingVersion && (
+          <div className='bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 p-4 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-4'>
+            <div className='flex items-center text-amber-800 dark:text-amber-400'>
+              <RotateCcw className='w-5 h-5 mr-3' />
+              <div>
+                <p className='font-semibold'>
+                  Previewing Version #{isPreviewingVersion.versionNumber}
+                </p>
+                <p className='text-sm opacity-80'>
+                  This is a read-only preview. Click "Revert" to restore these
+                  values.
+                </p>
+              </div>
+            </div>
+            <div className='flex space-x-2'>
+              <Button
+                size='sm'
+                variant='ghost'
+                className='text-amber-800 dark:text-amber-400'
+                onClick={() => {
+                  setFormData(entry?.content || {})
+                  setPreviewingVersion(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size='sm'
+                className='bg-amber-600 hover:bg-amber-700 text-white'
+                onClick={() => handleRevert(isPreviewingVersion)}
+              >
+                Revert to this Version
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {collection.localized && (
+          <div className='flex items-center space-x-2 bg-muted/40 p-1.5 rounded-lg border w-fit'>
+            {locales.map((l) => {
+              const hasTranslation =
+                existingTranslations[l.code] || entry?.locale === l.code
+              const isActive = currentLocale === l.code
+              const hasError =
+                errors[l.code] && Object.keys(errors[l.code]).length > 0
+
+              return (
+                <Button
+                  key={l.code}
+                  type='button'
+                  variant={isActive ? 'default' : 'ghost'}
+                  size='sm'
+                  className={cn(
+                    'h-8 px-3 text-xs gap-2 relative',
+                    !hasTranslation &&
+                      !isActive &&
+                      'text-muted-foreground opacity-60',
+                    hasError && 'ring-1 ring-destructive'
+                  )}
+                  onClick={() => {
+                    if (isActive) return
+
+                    if (existingTranslations[l.code]) {
+                      // Redirect to existing translation
+                      window.location.href = `/entries/${collection.id}/edit/${existingTranslations[l.code]}`
+                    } else if (
+                      mode === 'edit' ||
+                      (mode === 'create' && translationGroupId)
+                    ) {
+                      // Create new translation for this group
+                      window.location.href = `/entries/${collection.id}/add?translationGroupId=${translationGroupId}&sourceLocale=${currentLocale}&locale=${l.code}`
+                    } else {
+                      // Just switch locale for new entry
+
+                      // Save current to draft before switching
+                      setAllDrafts((prev) => ({
+                        ...prev,
+                        [currentLocale]: formData,
+                      }))
+
+                      const targetLocale = l.code
+                      setCurrentLocale(targetLocale)
+
+                      // Load or initialize target draft
+                      const targetDraft = allDrafts[targetLocale] || {}
+                      setFormData(initializeFormData(targetDraft))
+
+                      toast(`Entry language set to ${l.name}`, {
+                        description:
+                          targetDraft && Object.keys(targetDraft).length > 0
+                            ? 'Resumed your draft for ' + l.name
+                            : 'You are now creating this entry in ' + l.name,
+                      })
+                    }
+                  }}
+                >
+                  <span className='font-mono uppercase text-[10px]'>
+                    {l.code}
+                  </span>
+                  <span>{l.name}</span>
+                  {hasTranslation && (
+                    <div className='w-1.5 h-1.5 rounded-full bg-primary/50' />
+                  )}
+                  {hasError && (
+                    <div className='absolute -top-1 -right-1 w-2 h-2 rounded-full bg-destructive shadow-sm animate-pulse' />
+                  )}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+
+        <div
+          className={cn(
+            'grid grid-cols-1 gap-8 w-full',
+            mode === 'edit' && isDetailsVisible
+              ? 'lg:grid-cols-3'
+              : 'grid-cols-1'
+          )}
+        >
+          {/* Main Form Content */}
+          <div
+            className={cn(
+              'space-y-6',
+              mode === 'edit' && isDetailsVisible ? 'lg:col-span-2' : ''
+            )}
+          >
+            <form onSubmit={handleSubmit} className='space-y-6'>
+              {(() => {
+                interface FormSegment {
+                  type: 'normal' | 'group'
+                  fields?: FieldDefinition[]
+                  field?: FieldDefinition
+                }
+
+                const segments: FormSegment[] = []
+                let currentNormalFields: FieldDefinition[] = []
+
+                for (const field of collection.fields) {
+                  if (field.type === 'group') {
+                    if (currentNormalFields.length > 0) {
+                      segments.push({
+                        type: 'normal',
+                        fields: currentNormalFields,
+                      })
+                      currentNormalFields = []
+                    }
+                    segments.push({ type: 'group', field })
+                  } else {
+                    currentNormalFields.push(field)
+                  }
+                }
+
+                if (currentNormalFields.length > 0) {
+                  segments.push({ type: 'normal', fields: currentNormalFields })
+                }
+
+                return segments.map((segment, segmentIndex) => {
+                  if (segment.type === 'normal' && segment.fields) {
+                    return (
+                      <div
+                        key={`segment-normal-${segmentIndex}`}
+                        className={`bg-card p-8 rounded-xl border shadow-sm space-y-8 ${isPreviewingVersion ? 'opacity-50 pointer-events-none grayscale-[0.5]' : ''}`}
+                      >
+                        {segment.fields.map((field) => (
+                          <div key={field.id} className='space-y-2'>
+                            <div className='flex items-center justify-between border-b border-border/30 pb-1'>
+                              <Label className='text-xs font-bold uppercase tracking-widest text-muted-foreground/80'>
+                                {field.label || field.name}{' '}
+                                {field.required && (
+                                  <span className='text-destructive'>*</span>
+                                )}
+                              </Label>
+                              <div
+                                className={cn(
+                                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold uppercase tracking-wider border transition-colors',
+                                  fieldTypeColors[field.type] ||
+                                    'text-muted-foreground bg-muted border-border'
+                                )}
+                              >
+                                {(() => {
+                                  const icons: Record<string, any> = {
+                                    text: Type,
+                                    textarea: AlignLeft,
+                                    email: Mail,
+                                    number: Hash,
+                                    select: List,
+                                    checkbox: CheckSquare,
+                                    radio: CircleDot,
+                                    boolean: CheckCircle2,
+                                    date: Calendar,
+                                    datetime: Clock,
+                                    time: Clock,
+                                    media: ImageIcon,
+                                    documents: FileText,
+                                    'rich-text': FileJson,
+                                    relation: LinkIcon,
+                                    slug: Fingerprint,
+                                    array: Layers,
+                                    group: Layers,
+                                  }
+                                  const Icon = icons[field.type] || Type
+                                  return <Icon className='w-3 h-3' />
+                                })()}
+                                <span>
+                                  {field.type === 'rich-text'
+                                    ? 'Rich Text'
+                                    : field.type === 'array'
+                                      ? 'Repeater'
+                                      : field.type}
+                                </span>
+                              </div>
+                            </div>
+                            <FieldInput
+                              field={field}
+                              value={formData[field.name]}
+                              onChange={(val) =>
+                                handleFieldChange(field.name, val)
+                              }
+                              error={
+                                errors[currentLocale]
+                                  ? errors[currentLocale][field.name]
+                                      ?._errors?.[0]
+                                  : errors[field.name]
+                              }
+                              relationData={relationData}
+                              availableDocuments={availableDocuments}
+                              onMediaPickerOpen={handleMediaPickerOpen}
+                            />
+                            {field.helperText && !['text', 'textarea'].includes(field.type) && (
+                              <p className='text-xs text-muted-foreground mt-1 italic'>
+                                {field.helperText}
+                              </p>
+                            )}
+                            {field.type === 'media' && field.multiple && (
+                              <p className='text-[10px] text-muted-foreground italic'>
+                                You can select multiple files for this field and
+                                reorder them by moving their positions.
+                              </p>
+                            )}
+                            {(errors[currentLocale]
+                              ? errors[currentLocale][field.name]?._errors?.[0]
+                              : errors[field.name]) && (
+                              <p className='text-xs font-medium text-destructive mt-1'>
+                                {errors[currentLocale]
+                                  ? errors[currentLocale][field.name]
+                                      ?._errors?.[0]
+                                  : errors[field.name]}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  } else if (segment.type === 'group' && segment.field) {
+                    const field = segment.field
+                    return (
+                      <div
+                        key={`segment-group-${field.id}`}
+                        className={
+                          isPreviewingVersion
+                            ? 'opacity-50 pointer-events-none grayscale-[0.5]'
+                            : ''
+                        }
+                      >
+                        <FieldInput
+                          field={field}
+                          value={formData[field.name]}
+                          onChange={(val) => handleFieldChange(field.name, val)}
+                          error={
+                            errors[currentLocale]
+                              ? errors[currentLocale][field.name]
+                              : undefined
+                          }
+                          relationData={relationData}
+                          availableDocuments={availableDocuments}
+                          onMediaPickerOpen={handleMediaPickerOpen}
+                        />
+                        {(errors[currentLocale]
+                          ? errors[currentLocale][field.name]?._errors?.[0]
+                          : errors[field.name]) && (
+                          <p className='text-xs font-medium text-destructive mt-1'>
+                            {errors[currentLocale]
+                              ? errors[currentLocale][field.name]?._errors?.[0]
+                              : errors[field.name]}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  }
+                  return null
+                })
+              })()}
+
+              <div className='flex justify-end space-x-4'>
+                <Button type='button' variant='outline' asChild>
+                  <Link href={`/entries/${collection.id}`}>Cancel</Link>
+                </Button>
+                {!isPreviewingVersion && (
+                  <div className='flex items-center'>
+                    <div className='flex -space-x-px'>
+                      <Button
+                        type='button'
+                        disabled={isSubmitting}
+                        onClick={() => handleSubmit(undefined, 'published')}
+                        className='rounded-r-none border-r border-primary-foreground/20'
+                      >
+                        {isSubmitting ? (
+                          <Loader2Icon className='w-4 h-4 mr-2 animate-spin' />
+                        ) : (
+                          <Send className='w-4 h-4 mr-2' />
+                        )}
+                        {mode === 'create' ? 'Publish' : 'Update & Publish'}
+                      </Button>
+
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type='button'
+                            size='icon'
+                            disabled={isSubmitting}
+                            className='rounded-l-none'
+                          >
+                            <ChevronDown className='w-4 h-4' />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align='end' className='w-48'>
+                          <DropdownMenuItem
+                            onClick={() => handleSubmit(undefined, 'draft')}
+                            className='cursor-pointer'
+                          >
+                            <Save className='w-4 h-4 mr-2' />
+                            Save as Draft
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </form>
+          </div>
+
+          {/* Metadata Sidebar (Edit Mode Only) */}
+          {mode === 'edit' && entry && isDetailsVisible && (
+            <div className='lg:col-span-1 space-y-6 animate-in slide-in-from-right-4 duration-300'>
+              <div className='bg-card rounded-xl border shadow-sm divide-y overflow-hidden'>
+                <div className='p-6 bg-muted/20'>
+                  <h3 className='text-sm font-bold uppercase tracking-widest text-muted-foreground'>
+                    Entry Details
+                  </h3>
+                </div>
+
+                <div className='p-6 space-y-4'>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-sm font-medium text-muted-foreground'>
+                      ID
+                    </span>
+                    <span className='text-xs font-mono bg-muted px-2 py-1 rounded'>
+                      #{entry.id}
+                    </span>
+                  </div>
+
+                  <div className='flex items-center justify-between'>
+                    <span className='text-sm font-medium text-muted-foreground'>
+                      Status
+                    </span>
+                    <div className='flex items-center'>
+                      <div
+                        className={cn(
+                          'w-2 h-2 rounded-full mr-2',
+                          entry.status === 'published'
+                            ? 'bg-green-500'
+                            : 'bg-amber-500'
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          'text-xs font-bold uppercase tracking-wider',
+                          entry.status === 'published'
+                            ? 'text-green-600'
+                            : 'text-amber-600'
+                        )}
+                      >
+                        {entry.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {isSystemGlobal && (
+                    <div className='flex items-center justify-between'>
+                      <span className='text-sm font-medium text-muted-foreground'>
+                        Tenant
+                      </span>
+                      <div className='flex items-center text-sm text-foreground/80'>
+                        {entry?.tenant?.name || 'System Global'}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className='flex items-center justify-between'>
+                    <span className='text-sm font-medium text-muted-foreground'>
+                      Created At
+                    </span>
+                    <div className='flex items-center text-sm text-foreground/80'>
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className='flex items-center justify-between'>
+                    <span className='text-sm font-medium text-muted-foreground'>
+                      Last Updated
+                    </span>
+                    <div className='flex items-center text-sm text-foreground/80'>
+                      {new Date(entry.updatedAt).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* History Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div className='fixed inset-0 z-50 flex justify-end'>
+          <div
+            className='absolute inset-0 bg-background/80 backdrop-blur-sm'
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className='relative w-full max-w-md bg-card border-l h-full shadow-xl flex flex-col animate-in slide-in-from-right duration-300'>
+            <div className='p-6 border-b flex items-center justify-between bg-muted/20'>
+              <div className='flex items-center space-x-2'>
+                <History className='w-5 h-5 text-primary' />
+                <h2 className='text-xl font-bold'>Version History</h2>
+              </div>
+              <Button
+                variant='ghost'
+                size='icon'
+                onClick={() => setSidebarOpen(false)}
+              >
+                <XIcon className='w-5 h-5' />
+              </Button>
+            </div>
+
+            <div className='flex-1 overflow-y-auto p-6 space-y-4'>
+              <p className='text-xs text-muted-foreground mb-4'>
+                We store up to the last 5 versions of this entry. Click on a
+                version to preview it.
+              </p>
+
+              {versions.length > 0 ? (
+                versions.map((v) => (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      setPreviewingVersion(v)
+                      setFormData(v.content)
+                      setSidebarOpen(false)
+                      window.scrollTo({ top: 0, behavior: 'smooth' })
+                    }}
+                    className={cn(
+                      'w-full text-left p-4 rounded-xl border transition-all group hover:border-primary/50 hover:shadow-md',
+                      isPreviewingVersion?.id === v.id
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : 'bg-background'
+                    )}
+                  >
+                    <div className='flex justify-between items-start mb-2'>
+                      <span className='text-xs font-bold uppercase tracking-widest text-primary'>
+                        Version #{v.versionNumber}
+                      </span>
+                      <Clock className='w-3 h-3 text-muted-foreground opacity-50' />
+                    </div>
+                    <div className='space-y-1'>
+                      <div className='flex items-center text-sm font-medium'>
+                        <User className='w-3 h-3 mr-1.5 opacity-60' />
+                        {v.createdBy?.name || 'Unknown User'}
+                      </div>
+                      <p className='text-[10px] text-muted-foreground'>
+                        Saved on {new Date(v.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className='mt-3 flex items-center text-[10px] font-bold text-primary opacity-0 group-hover:opacity-100 transition-opacity'>
+                      <RotateCcw className='w-3 h-3 mr-1' />
+                      PREVIEW TO REVERT
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className='h-64 flex flex-col items-center justify-center text-muted-foreground italic border-2 border-dashed rounded-xl'>
+                  <History className='w-8 h-8 mb-2 opacity-20' />
+                  <p>No previous versions found.</p>
+                </div>
+              )}
+            </div>
+
+            <div className='p-6 border-t bg-muted/10'>
+              <Button
+                variant='outline'
+                className='w-full'
+                onClick={() => setSidebarOpen(false)}
+              >
+                Close History
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <MediaPicker
+        open={!!activeMediaPickerField}
+        onOpenChange={(open) => !open && setActiveMediaPickerField(null)}
+        onSelectMedia={handleMediaSelect}
+        multiple={mediaPickerMultiple}
+      />
+    </Layout>
+  )
+}

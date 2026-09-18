@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: mycms
+      POSTGRES_PASSWORD: cms_password
+      POSTGRES_DB: cms_cms
+    volumes:
+      - cms_db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  mycms:
+    build: .
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://mycms:cms_password@db:5432/cms_cms
+      - JWT_SECRET=change_this_to_a_secure_random_string
+      - JWT_EXPIRES_IN_DAYS=7
+      # Email Service Configuration
+      - EMAIL_SERVICE=RESEND
+      - RESEND_API_KEY=
+      - EMAIL_FROM=My CMS <onboarding@resend.dev>
+      # AWS SES & S3 Shared Configuration
+      - AWS_REGION=
+      - AWS_ACCESS_KEY_ID=
+      - AWS_SECRET_ACCESS_KEY=
+      # Storage Service Configuration
+      - STORAGE_SERVICE=CLOUDINARY
+      - AWS_S3_BUCKET=
+      # Cloudinary credentials (if STORAGE_SERVICE=CLOUDINARY)
+      - CLOUDINARY_CLOUD_NAME=
+      - CLOUDINARY_API_KEY=
+      - CLOUDINARY_API_SECRET=
+      - CLOUDINARY_UPLOAD_PRESET=
+      # Optional
+      - SIMPLE_HOMEPAGE=0
+      - APP_DOMAIN=
+    depends_on:
+      - db
+
+volumes:
+  cms_db_data:

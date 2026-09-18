@@ -1,0 +1,675 @@
+import Layout from '@/components/Layout'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { Link, usePage } from '@inertiajs/react'
+import {
+  ArrowUpRight,
+  ChevronRight,
+  Clock,
+  Database,
+  ExternalLink,
+  FileText,
+  Image,
+  LayoutGrid,
+  Plus,
+  Users,
+} from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { format } from 'date-fns'
+
+interface Stats {
+  totalCollections: number
+  totalGlobals: number
+  totalEntries: number
+  totalMedia: number
+  totalDocuments: number
+  totalUsers: number
+}
+
+interface Activity {
+  id: number
+  collectionId: number
+  content: any
+  createdAt: string
+  updatedAt: string
+  collectionName: string
+  collectionSlug: string
+}
+
+interface CollectionStat {
+  id: number
+  name: string
+  slug: string
+  count: number
+  tenantName?: string
+  tenantId?: number
+}
+
+interface DashboardProps {
+  user: any
+  stats: Stats
+  recentActivity: Activity[]
+  collectionBreakdown: CollectionStat[]
+  trafficData: { date: string; count: number }[]
+  performanceData: { date: string; avgResponseTime: number }[]
+  proUsers?: any[]
+  currentMonthlyRequests?: number
+}
+
+export default function Dashboard({
+  user,
+  stats,
+  recentActivity,
+  collectionBreakdown,
+  trafficData = [],
+  performanceData = [],
+  proUsers = [],
+  currentMonthlyRequests = 0,
+}: DashboardProps) {
+  const { activeTenant, activeTenantRole, features } = usePage().props as any
+  const canAccessApiAbilities =
+    user?.role === 'super_admin' || activeTenantRole === 'owner'
+  const isCollectionsLimitReached =
+    user?.role !== 'super_admin' &&
+    !!activeTenant &&
+    !!features &&
+    typeof features.maxCollections === 'number' &&
+    stats.totalCollections >= features.maxCollections
+
+  const limit = features?.allowedMonthlyRequests ?? 20000
+  const isUnlimited = limit === Infinity || limit <= 0
+  const isLimitReached = !isUnlimited && currentMonthlyRequests >= limit
+  const isNearLimit =
+    !isUnlimited && !isLimitReached && currentMonthlyRequests >= limit * 0.8
+
+  const percentage = isUnlimited
+    ? 0
+    : Math.min((currentMonthlyRequests / limit) * 100, 100)
+  const limitLabel = isUnlimited ? 'Unlimited' : limit.toLocaleString()
+
+  const overviewItems = [
+    {
+      label: 'Collections',
+      value: stats.totalCollections,
+      icon: LayoutGrid,
+      color: 'text-blue-500',
+      bg: 'bg-blue-50',
+      glow: 'bg-blue-600/30',
+    },
+    {
+      label: 'Globals',
+      value: stats.totalGlobals,
+      icon: Database,
+      color: 'text-purple-500',
+      bg: 'bg-purple-50',
+      glow: 'bg-purple-600/30',
+    },
+    {
+      label: 'Media Assets',
+      value: stats.totalMedia,
+      icon: Image,
+      color: 'text-orange-500',
+      bg: 'bg-orange-50',
+      glow: 'bg-orange-600/30',
+    },
+    {
+      label: 'Documents',
+      value: stats.totalDocuments,
+      icon: FileText,
+      color: 'text-green-500',
+      bg: 'bg-green-50',
+      glow: 'bg-green-600/30',
+    },
+  ]
+
+  return (
+    <Layout user={user} title='Dashboard'>
+      <div className='space-y-8 pb-12'>
+        {/* Welcome Section */}
+        <div>
+          <h1 className='text-3xl font-bold tracking-tight'>
+            Welcome back, {user?.name || 'Administrator'}
+          </h1>
+          <p className='text-muted-foreground mt-1 text-lg'>
+            Here's what's happening with your content today.
+          </p>
+        </div>
+
+        {/* Stats Grid */}
+        <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
+          {overviewItems.map((item) => (
+            <div
+              key={item.label}
+              className='bg-card p-6 rounded-2xl border shadow-sm transition-all hover:shadow-md group relative overflow-hidden'
+            >
+              {/* Decorative Glow */}
+              <div
+                className={`absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] ${item.glow} rounded-full blur-[80px] group-hover:blur-[100px] transition-all duration-500`}
+              />
+
+              <div className='relative z-10'>
+                <div className='flex items-center justify-between mb-4'>
+                  <div
+                    className={`${item.bg} p-2.5 rounded-xl transition-colors group-hover:scale-110 duration-200`}
+                  >
+                    <item.icon className={`w-5 h-5 ${item.color}`} />
+                  </div>
+                  <span className='text-[10px] font-bold uppercase tracking-wider text-muted-foreground opacity-50 group-hover:opacity-100 transition-opacity'>
+                    Overview
+                  </span>
+                </div>
+                <div className='space-y-1'>
+                  <h3 className='text-sm font-medium text-muted-foreground uppercase tracking-tight'>
+                    {item.label}
+                  </h3>
+                  <p className='text-3xl font-bold tracking-tight leading-none'>
+                    {item.value.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Analytics Section */}
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
+          <section className='bg-card rounded-2xl border shadow-sm overflow-hidden p-6'>
+            <div className='flex items-center justify-between mb-6'>
+              <div>
+                <h3 className='text-lg font-semibold flex items-center'>
+                  <ArrowUpRight className='w-4 h-4 mr-2 text-blue-500' />
+                  API Traffic
+                </h3>
+                <p className='text-xs text-muted-foreground'>
+                  Total requests over the last 7 days
+                </p>
+              </div>
+              <div className='text-right'>
+                <span className='text-2xl font-bold'>
+                  {trafficData.reduce((acc, curr) => acc + curr.count, 0)}
+                </span>
+                <p className='text-[10px] text-muted-foreground uppercase'>
+                  Total Hits
+                </p>
+              </div>
+            </div>
+            <div className='h-[250px] w-full'>
+              <ResponsiveContainer width='100%' height='100%'>
+                <LineChart data={trafficData}>
+                  <CartesianGrid
+                    strokeDasharray='3 3'
+                    vertical={false}
+                    stroke='currentColor'
+                    opacity={0.1}
+                  />
+                  <XAxis
+                    dataKey='date'
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, opacity: 0.5 }}
+                    tickFormatter={(str) => format(new Date(str), 'MMM d')}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, opacity: 0.5 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      borderRadius: '12px',
+                      border: '1px solid hsl(var(--border))',
+                    }}
+                    labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                    labelFormatter={(str) => format(new Date(str), 'PPPP')}
+                  />
+                  <Line
+                    type='monotone'
+                    dataKey='count'
+                    stroke='hsl(var(--primary))'
+                    strokeWidth={3}
+                    dot={{ fill: 'hsl(var(--primary))', strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+
+          <section className='bg-card rounded-2xl border shadow-sm overflow-hidden p-6'>
+            <div className='flex items-center justify-between mb-6'>
+              <div>
+                <h3 className='text-lg font-semibold flex items-center'>
+                  <Clock className='w-4 h-4 mr-2 text-purple-500' />
+                  Average Response Time
+                </h3>
+                <p className='text-xs text-muted-foreground'>
+                  Latency trends (ms)
+                </p>
+              </div>
+              <div className='text-right'>
+                <span className='text-2xl font-bold'>
+                  {performanceData.length > 0
+                    ? Math.round(
+                        performanceData.reduce(
+                          (acc, curr) => acc + curr.avgResponseTime,
+                          0
+                        ) / performanceData.length
+                      )
+                    : 0}
+                  ms
+                </span>
+                <p className='text-[10px] text-muted-foreground uppercase'>
+                  Avg Latency
+                </p>
+              </div>
+            </div>
+            <div className='h-[250px] w-full'>
+              <ResponsiveContainer width='100%' height='100%'>
+                <AreaChart data={performanceData}>
+                  <defs>
+                    <linearGradient id='colorAvg' x1='0' y1='0' x2='0' y2='1'>
+                      <stop
+                        offset='5%'
+                        stopColor='rgb(168, 85, 247)'
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset='95%'
+                        stopColor='rgb(168, 85, 247)'
+                        stopOpacity={0}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid
+                    strokeDasharray='3 3'
+                    vertical={false}
+                    stroke='currentColor'
+                    opacity={0.1}
+                  />
+                  <XAxis
+                    dataKey='date'
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, opacity: 0.5 }}
+                    tickFormatter={(str) => format(new Date(str), 'MMM d')}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, opacity: 0.5 }}
+                    unit='ms'
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      borderRadius: '12px',
+                      border: '1px solid hsl(var(--border))',
+                    }}
+                    labelFormatter={(str) => format(new Date(str), 'PPPP')}
+                    formatter={(value: any) => [
+                      `${Number(value).toFixed(2)} ms`,
+                      'Average Latency',
+                    ]}
+                  />
+                  <Area
+                    type='monotone'
+                    dataKey='avgResponseTime'
+                    name='Average Latency'
+                    stroke='rgb(168, 85, 247)'
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill='url(#colorAvg)'
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        </div>
+
+        <div className='grid grid-cols-1 lg:grid-cols-3 gap-8'>
+          {/* Main Column */}
+          <div className='lg:col-span-2 space-y-8'>
+            {/* PRO Users & Workspaces (Super Admin only) */}
+            {user?.role === 'super_admin' && (
+              <section className='bg-card rounded-2xl border shadow-sm overflow-hidden flex flex-col'>
+                <div className='p-6 border-b flex items-center justify-between bg-muted/20'>
+                  <div className='flex items-center space-x-2'>
+                    <Users className='w-4 h-4 text-purple-500' />
+                    <h3 className='text-lg font-semibold'>PRO Subscribers</h3>
+                  </div>
+                  <span className='text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 px-2 py-0.5 rounded-full'>
+                    {proUsers.length} Active
+                  </span>
+                </div>
+                <div className='divide-y overflow-x-auto max-h-[280px] overflow-y-auto'>
+                  {proUsers.length > 0 ? (
+                    <table className='w-full text-left border-collapse'>
+                      <thead>
+                        <tr className='bg-muted/5 text-muted-foreground text-xs font-semibold uppercase tracking-wider border-b'>
+                          <th className='px-6 py-3'>User</th>
+                          <th className='px-6 py-3'>Email</th>
+                          <th className='px-6 py-3'>Workspaces</th>
+                        </tr>
+                      </thead>
+                      <tbody className='divide-y divide-border text-sm'>
+                        {proUsers.map((proUser) => (
+                          <tr
+                            key={proUser.id}
+                            className='hover:bg-muted/30 transition-colors'
+                          >
+                            <td className='px-6 py-4 font-medium text-foreground'>
+                              {proUser.name || proUser.username}
+                            </td>
+                            <td className='px-6 py-4 text-muted-foreground'>
+                              {proUser.email}
+                            </td>
+                            <td className='px-6 py-4'>
+                              <div className='flex flex-wrap gap-1.5'>
+                                {proUser.tenants.length > 0 ? (
+                                  proUser.tenants.map((t: any) => (
+                                    <span
+                                      key={t.id}
+                                      className='inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-muted border text-foreground'
+                                    >
+                                      {t.name}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className='text-xs text-muted-foreground italic'>
+                                    No workspaces
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className='p-6 text-center text-muted-foreground italic text-sm'>
+                      No active PRO plan subscribers found.
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Recent Activity */}
+            <section className='bg-card rounded-2xl border shadow-sm overflow-hidden flex flex-col'>
+              <div className='p-6 border-b flex items-center justify-between bg-muted/20'>
+                <div className='flex items-center space-x-2'>
+                  <Clock className='w-4 h-4 text-primary' />
+                  <h3 className='text-lg font-semibold'>Recent Activity</h3>
+                </div>
+                <Button variant='ghost' size='sm' className='text-xs' asChild>
+                  <Link href='/entries'>
+                    View All <ChevronRight className='w-3 h-3 ml-1' />
+                  </Link>
+                </Button>
+              </div>
+              <div className='divide-y'>
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity) => (
+                    <div
+                      key={`${activity.id}-${activity.updatedAt}`}
+                      className='p-5 hover:bg-muted/30 transition-colors group flex items-start space-x-4'
+                    >
+                      <div className='bg-primary/5 dark:bg-primary/10 px-2 py-1 rounded-md mt-1 shrink-0 border border-primary/10'>
+                        <span className='text-[11px] font-mono font-bold text-primary'>
+                          #{activity.id}
+                        </span>
+                      </div>
+                      <div className='flex-1 min-w-0'>
+                        <div className='flex items-center space-x-2'>
+                          <p className='font-semibold truncate'>
+                            Updated{' '}
+                            <span className='text-primary'>
+                              {activity.collectionName}
+                            </span>{' '}
+                            entry
+                          </p>
+                        </div>
+                        <p className='text-xs text-muted-foreground mt-0.5'>
+                          {format(new Date(activity.updatedAt), 'PPP p')}
+                        </p>
+                      </div>
+                      <Button
+                        variant='ghost'
+                        size='icon'
+                        className='h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity'
+                        asChild
+                      >
+                        <Link
+                          href={`/entries/${activity.collectionId}/edit/${activity.id}`}
+                        >
+                          <ArrowUpRight className='w-4 h-4' />
+                        </Link>
+                      </Button>
+                    </div>
+                  ))
+                ) : (
+                  <div className='p-12 text-center'>
+                    <p className='text-muted-foreground italic'>
+                      No recent activity found.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Collection Status */}
+            <section className='bg-card rounded-2xl border shadow-sm overflow-hidden'>
+              <div className='p-6 border-b bg-muted/20'>
+                <h3 className='text-lg font-semibold flex items-center'>
+                  <LayoutGrid className='w-4 h-4 mr-2' />
+                  Collection Breakdown
+                </h3>
+                <p className='text-xs text-muted-foreground mt-0.5 ml-6'>
+                  Showing top 10 collections by entries count
+                </p>
+              </div>
+              <div className='overflow-x-auto'>
+                <table className='w-full text-sm text-left'>
+                  <thead className='text-xs text-muted-foreground uppercase bg-muted/50 border-b'>
+                    <tr>
+                      <th className='px-6 py-3 font-medium'>Name</th>
+                      {user?.role === 'super_admin' && (
+                        <th className='px-6 py-3 font-medium'>Tenant</th>
+                      )}
+                      <th className='px-6 py-3 font-medium'>Slug</th>
+                      <th className='px-6 py-3 font-medium text-center'>
+                        Entries
+                      </th>
+                      <th className='px-6 py-3 text-right'></th>
+                    </tr>
+                  </thead>
+                  <tbody className='divide-y'>
+                    {collectionBreakdown.map((col) => (
+                      <tr
+                        key={col.id}
+                        className='hover:bg-muted/30 transition-colors group'
+                      >
+                        <td className='px-6 py-4 font-semibold'>{col.name}</td>
+                        {user?.role === 'super_admin' && (
+                          <td className='px-6 py-4 text-xs text-muted-foreground'>
+                            {col.tenantName || `ID: ${col.tenantId}`}
+                          </td>
+                        )}
+                        <td className='px-6 py-4 font-mono text-xs opacity-60'>
+                          /{col.slug}
+                        </td>
+                        <td className='px-6 py-4 text-center'>
+                          <span className='bg-primary/10 text-primary px-2.5 py-0.5 rounded-full font-bold text-xs'>
+                            {col.count}
+                          </span>
+                        </td>
+                        <td className='px-6 py-4 text-right'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-7 text-xs'
+                            asChild
+                          >
+                            <Link href={`/entries/${col.id}`}>
+                              View Entries
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          {/* Sidebar Area */}
+          <div className='space-y-8'>
+            {/* Monthly Requests Usage Tracker */}
+            <section className='bg-card rounded-2xl border shadow-sm p-6 space-y-4 relative overflow-hidden'>
+              <div className='flex items-center justify-between'>
+                <h3 className='text-base font-semibold flex items-center gap-2'>
+                  <ArrowUpRight className='w-4 h-4 text-primary' />
+                  Monthly Requests
+                </h3>
+                <span
+                  className={cn(
+                    'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full',
+                    isLimitReached
+                      ? 'bg-red-500/10 text-red-500'
+                      : isNearLimit
+                        ? 'bg-amber-500/10 text-amber-500'
+                        : 'bg-green-500/10 text-green-500'
+                  )}
+                >
+                  {isLimitReached
+                    ? 'Exceeded'
+                    : isNearLimit
+                      ? 'Warning'
+                      : 'Healthy'}
+                </span>
+              </div>
+
+              <div className='space-y-3'>
+                <div className='flex items-baseline justify-between text-sm'>
+                  <span className='font-medium text-foreground'>API Usage</span>
+                  <span className='font-mono font-semibold text-muted-foreground'>
+                    {currentMonthlyRequests.toLocaleString()} / {limitLabel}
+                  </span>
+                </div>
+
+                {/* Progress bar container */}
+                <div className='h-2 w-full bg-secondary rounded-full overflow-hidden relative'>
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500 ease-out',
+                      isLimitReached
+                        ? 'bg-red-500'
+                        : isNearLimit
+                          ? 'bg-amber-500'
+                          : 'bg-primary'
+                    )}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </div>
+
+                {/* Helpful status note */}
+                <p className='text-xs text-muted-foreground leading-relaxed'>
+                  {isLimitReached
+                    ? 'Your workspace has exceeded the monthly request limit. Please upgrade your plan to increase limits.'
+                    : isNearLimit
+                      ? `Warning: You have used ${percentage.toFixed(0)}% of your monthly allowed requests.`
+                      : 'Requests count resets at the beginning of each calendar month.'}
+                </p>
+              </div>
+            </section>
+
+            {/* Quick Actions */}
+            <section className='bg-card rounded-2xl border shadow-sm p-6 space-y-4'>
+              <h3 className='text-lg font-semibold flex items-center'>
+                <Plus className='w-4 h-4 mr-2' />
+                Quick Actions
+              </h3>
+              <div className='grid grid-cols-1 gap-2'>
+                {!isCollectionsLimitReached && (
+                  <Button
+                    variant='outline'
+                    className='justify-start h-12 rounded-xl border-dashed hover:border-solid hover:bg-primary/5 hover:text-primary transition-all'
+                    asChild
+                  >
+                    <Link href='/collections/add'>
+                      <Plus className='w-4 h-4 mr-3' />
+                      New Collection
+                    </Link>
+                  </Button>
+                )}
+                <Button
+                  variant='outline'
+                  className='justify-start h-12 rounded-xl border-dashed hover:border-solid hover:bg-primary/5 hover:text-primary transition-all'
+                  asChild
+                >
+                  <Link href='/media'>
+                    <Image className='w-4 h-4 mr-3' />
+                    Manage Media
+                  </Link>
+                </Button>
+                {canAccessApiAbilities && (
+                  <Button
+                    variant='outline'
+                    className='justify-start h-12 rounded-xl border-dashed hover:border-solid hover:bg-primary/5 hover:text-primary transition-all'
+                    asChild
+                  >
+                    <Link href='/api-key-abilities'>
+                      <Users className='w-4 h-4 mr-3' />
+                      API Permissions
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </section>
+
+            {/* API Status/Key */}
+            <section className='bg-zinc-900 text-zinc-100 rounded-2xl p-6 shadow-xl ring-1 ring-zinc-800'>
+              <div className='flex items-center justify-between mb-4'>
+                <div className='bg-zinc-800 p-2 rounded-lg'>
+                  <ArrowUpRight className='w-4 h-4 text-zinc-400' />
+                </div>
+                <div className='flex items-center space-x-1.5'>
+                  <div className='w-2 h-2 rounded-full bg-green-500 animate-pulse' />
+                  <span className='text-[10px] font-bold uppercase tracking-widest text-zinc-500'>
+                    API Active
+                  </span>
+                </div>
+              </div>
+              <h3 className='text-lg font-bold mb-1'>My CMS API</h3>
+              <p className='text-xs text-zinc-400 mb-6 leading-relaxed'>
+                Access your content programmatically via our REST endpoints.
+              </p>
+              <Button
+                variant='secondary'
+                className='w-full bg-zinc-100 hover:bg-white text-black font-bold h-11 rounded-xl'
+                asChild
+              >
+                <Link href='/api-docs'>
+                  Open API Docs
+                  <ExternalLink className='w-4 h-4 ml-2' />
+                </Link>
+              </Button>
+            </section>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  )
+}

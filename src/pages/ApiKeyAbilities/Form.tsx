@@ -1,0 +1,396 @@
+import Layout from '@/components/Layout'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { Link, useForm } from '@inertiajs/react'
+import {
+  ArrowLeftIcon,
+  FolderIcon,
+  HelpCircleIcon,
+  ImageIcon,
+  LayersIcon,
+  LockIcon,
+  SaveIcon,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import React from 'react'
+
+interface Collection {
+  id: number
+  name: string
+  slug: string
+}
+
+type PermissionAction = 'read' | 'create' | 'update' | 'delete'
+
+interface PermissionItem {
+  id: string | number
+  name: string
+  slug: string
+  actions: PermissionAction[]
+  isSystemResource?: boolean
+}
+
+interface Ability {
+  id: number
+  name: string
+  permissions: Record<
+    string,
+    { create: boolean; read: boolean; update: boolean; delete: boolean }
+  >
+  isSystem: string
+}
+
+interface Props {
+  user: any
+  collections: Collection[]
+  ability?: Ability
+  mode: 'create' | 'edit'
+}
+
+const SYSTEM_RESOURCES: PermissionItem[] = [
+  {
+    id: 'media',
+    name: 'Media',
+    slug: 'media',
+    actions: ['read', 'create', 'delete'],
+    isSystemResource: true,
+  },
+  {
+    id: 'media_folder',
+    name: 'Media Folder',
+    slug: 'media_folder',
+    actions: ['create', 'delete'],
+    isSystemResource: true,
+  },
+]
+
+export default function AbilityForm({
+  user,
+  collections = [],
+  ability,
+  mode,
+}: Props) {
+  const allPermissionItems: PermissionItem[] = [
+    ...collections.map((col) => ({
+      id: col.id,
+      name: col.name,
+      slug: col.slug,
+      actions: ['read', 'create', 'update', 'delete'] as PermissionAction[],
+      isSystemResource: false,
+    })),
+    ...SYSTEM_RESOURCES,
+  ]
+
+  const { data, setData, processing } = useForm({
+    name: ability?.name || '',
+    permissions:
+      ability?.permissions ||
+      allPermissionItems.reduce((acc, item) => {
+        acc[item.slug] = {
+          create: false,
+          read: false,
+          update: false,
+          delete: false,
+        }
+        return acc
+      }, {} as any),
+  })
+
+  const handlePermissionChange = (
+    slug: string,
+    action: PermissionAction,
+    checked: boolean
+  ) => {
+    const newPermissions = { ...data.permissions }
+    if (!newPermissions[slug]) {
+      newPermissions[slug] = {
+        create: false,
+        read: false,
+        update: false,
+        delete: false,
+      }
+    } else {
+      newPermissions[slug] = { ...newPermissions[slug] }
+    }
+    newPermissions[slug][action] = checked
+    setData('permissions', newPermissions)
+  }
+
+  const handleCheckAll = (checked: boolean) => {
+    const newPermissions = { ...data.permissions }
+    allPermissionItems.forEach((item) => {
+      newPermissions[item.slug] = {
+        create: item.actions.includes('create') ? checked : false,
+        read: item.actions.includes('read') ? checked : false,
+        update: item.actions.includes('update') ? checked : false,
+        delete: item.actions.includes('delete') ? checked : false,
+      }
+    })
+    setData('permissions', newPermissions)
+  }
+
+  const handleRowCheckAll = (item: PermissionItem, checked: boolean) => {
+    const newPermissions = { ...data.permissions }
+    newPermissions[item.slug] = {
+      create: item.actions.includes('create') ? checked : false,
+      read: item.actions.includes('read') ? checked : false,
+      update: item.actions.includes('update') ? checked : false,
+      delete: item.actions.includes('delete') ? checked : false,
+    }
+    setData('permissions', newPermissions)
+  }
+
+  const isRowAllChecked = (item: PermissionItem) => {
+    const p = data.permissions[item.slug]
+    return !!p && item.actions.every((action) => !!p[action])
+  }
+
+  const allChecked =
+    allPermissionItems.length > 0 &&
+    allPermissionItems.every((item) => isRowAllChecked(item))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!data.name) {
+      toast.error('Name is required')
+      return
+    }
+
+    const url =
+      mode === 'create' ? '/api/abilities' : `/api/abilities/${ability?.id}`
+    const method = mode === 'create' ? 'POST' : 'PUT'
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+
+      const result = await res.json()
+
+      if (res.ok) {
+        toast.success(mode === 'create' ? 'Ability created' : 'Ability updated')
+        window.location.href = '/api-key-abilities'
+      } else {
+        toast.error(result.error || 'Failed to save ability')
+      }
+    } catch (err) {
+      toast.error('Network error')
+    }
+  }
+
+  return (
+    <Layout
+      user={user}
+      title={mode === 'create' ? 'Create Ability' : 'Edit Ability'}
+    >
+      <div className='w-full space-y-6 flex flex-col pt-4 pb-12'>
+        <div className='flex justify-between items-center'>
+          <div className='flex items-center space-x-3'>
+            <Button
+              variant='ghost'
+              size='icon'
+              asChild
+              className='rounded-full'
+            >
+              <Link href='/api-key-abilities'>
+                <ArrowLeftIcon className='w-5 h-5 text-muted-foreground' />
+              </Link>
+            </Button>
+            <div>
+              <h1 className='text-3xl font-bold tracking-tight flex items-center gap-2'>
+                {mode === 'create'
+                  ? 'Create Ability'
+                  : ability?.isSystem === '1'
+                    ? 'View System Ability'
+                    : 'Edit Ability'}
+                {ability?.isSystem === '1' && (
+                  <LockIcon className='w-6 h-6 text-blue-500' />
+                )}
+              </h1>
+              <p className='text-muted-foreground text-sm'>
+                {ability?.isSystem === '1'
+                  ? 'System abilities are protected and cannot be modified.'
+                  : 'Define granular CRUD permissions for your collections and media assets.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className='space-y-6'>
+          <div className='max-w-md bg-card rounded-xl border p-6 shadow-sm space-y-4'>
+            <div className='space-y-2 w-full'>
+              <Label htmlFor='name'>Ability Name</Label>
+              <Input
+                id='name'
+                placeholder='e.g. Blogger, Analytics Read-Only'
+                value={data.name}
+                onChange={(e) => setData('name', e.target.value)}
+                disabled={ability?.isSystem === '1'}
+              />
+              {ability?.isSystem === '1' && (
+                <p className='text-[10px] text-blue-600 flex items-center gap-1 mt-1'>
+                  <LockIcon className='w-3 h-3' /> System abilities have
+                  restricted name editing.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className='bg-card rounded-xl border shadow-sm overflow-hidden'>
+            <div className='p-4 bg-muted/30 border-b flex items-center justify-between'>
+              <h3 className='text-sm font-semibold uppercase tracking-wider text-muted-foreground ml-2 flex items-center gap-2'>
+                Collection & Resource Permissions
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircleIcon className='w-4 h-4 text-muted-foreground cursor-help' />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Define access levels for collections, media files, and folders.
+                  </TooltipContent>
+                </Tooltip>
+              </h3>
+
+              {allPermissionItems.length > 0 && ability?.isSystem !== '1' && (
+                <div className='flex items-center space-x-2 mr-2 bg-background/50 border border-muted hover:border-border hover:bg-background px-3 py-1.5 rounded-lg transition-all'>
+                  <Checkbox
+                    id='check-all-permissions'
+                    checked={allChecked}
+                    onCheckedChange={(checked) => handleCheckAll(!!checked)}
+                  />
+                  <Label
+                    htmlFor='check-all-permissions'
+                    className='text-[10px] font-bold uppercase tracking-wider cursor-pointer select-none'
+                  >
+                    Select All
+                  </Label>
+                </div>
+              )}
+            </div>
+
+            <div className='divide-y'>
+              {allPermissionItems.length > 0 ? (
+                allPermissionItems.map((item) => {
+                  const itemPerms = data.permissions[item.slug] || {
+                    create: false,
+                    read: false,
+                    update: false,
+                    delete: false,
+                  }
+                  const rowChecked = isRowAllChecked(item)
+
+                  return (
+                    <div
+                      key={item.slug}
+                      className='grid grid-cols-1 md:grid-cols-5 p-6 md:p-4 hover:bg-muted/10 transition-colors'
+                    >
+                      <div className='md:col-span-1 flex flex-col justify-center'>
+                        <div className='flex items-center gap-2'>
+                          {item.slug === 'media' ? (
+                            <ImageIcon className='w-4 h-4 text-primary shrink-0' />
+                          ) : item.slug === 'media_folder' ? (
+                            <FolderIcon className='w-4 h-4 text-primary shrink-0' />
+                          ) : (
+                            <LayersIcon className='w-4 h-4 text-muted-foreground shrink-0' />
+                          )}
+                          <span className='font-semibold text-foreground text-sm'>
+                            {item.name}
+                          </span>
+                          {item.isSystemResource && (
+                            <span className='text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20'>
+                              System
+                            </span>
+                          )}
+                        </div>
+                        <span className='text-[10px] font-mono text-muted-foreground ml-6'>
+                          {item.slug}
+                        </span>
+                      </div>
+
+                      <div className='md:col-span-4 flex items-center gap-4 mt-4 md:mt-0 w-full'>
+                        {ability?.isSystem !== '1' && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className='flex items-center justify-center p-2.5 rounded-lg border border-dashed hover:border-border hover:bg-muted/10 transition-all shrink-0 h-10 w-10'>
+                                <Checkbox
+                                  id={`row-check-all-${item.slug}`}
+                                  checked={rowChecked}
+                                  onCheckedChange={(checked) => {
+                                    handleRowCheckAll(item, !!checked)
+                                  }}
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Toggle all available permissions for {item.name}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+
+                        <div className='flex-1 grid grid-cols-2 lg:grid-cols-4 gap-4'>
+                          {item.actions.map((action) => (
+                            <div
+                              key={action}
+                              className='flex items-center space-x-2 bg-muted/20 p-2.5 rounded-lg border border-transparent hover:border-border transition-all h-10'
+                            >
+                              <Checkbox
+                                id={`perm-${item.slug}-${action}`}
+                                checked={
+                                  itemPerms[action as keyof typeof itemPerms]
+                                }
+                                onCheckedChange={(checked) =>
+                                  handlePermissionChange(
+                                    item.slug,
+                                    action,
+                                    !!checked
+                                  )
+                                }
+                                disabled={ability?.isSystem === '1'}
+                              />
+                              <Label
+                                htmlFor={`perm-${item.slug}-${action}`}
+                                className='text-xs font-medium uppercase tracking-widest cursor-pointer select-none'
+                              >
+                                {action}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              ) : (
+                <div className='p-12 text-center text-muted-foreground text-sm italic'>
+                  No permissions available.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {ability?.isSystem !== '1' && (
+            <div className='flex justify-end pt-2'>
+              <Button
+                type='submit'
+                size='lg'
+                disabled={processing}
+                className='min-w-[120px]'
+              >
+                <SaveIcon className='w-4 h-4 mr-2' />
+                {processing ? 'Saving...' : 'Save Ability'}
+              </Button>
+            </div>
+          )}
+        </form>
+      </div>
+    </Layout>
+  )
+}
