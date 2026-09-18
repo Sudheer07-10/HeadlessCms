@@ -620,8 +620,10 @@ async function requireAuth(c: any, next: any) {
   const cleanHost = host.split(':')[0]
   const baseAppDomain = process.env.APP_DOMAIN || 'my-cms.com'
   const isRootDomain = cleanHost === baseAppDomain
+  const isSelfHosted = process.env.IS_SELF_HOSTED === 'true'
 
   if (
+    !isSelfHosted &&
     isRootDomain &&
     currentTenant &&
     userData.role !== 'super_admin' &&
