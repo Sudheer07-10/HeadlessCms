@@ -285,7 +285,8 @@ app.use('*', async (c, next) => {
   const activeTenantId =
     subdomainTenantId?.toString() ||
     c.req.header('X-Tenant-ID') ||
-    getCookie(c, 'cms_active_tenant')
+    getCookie(c, 'cms_active_tenant') ||
+    (process.env.IS_SELF_HOSTED === 'true' ? '1' : undefined)
 
   let currentTenant: any = null
   let tenantId: number | null = null
